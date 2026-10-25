@@ -1,23 +1,51 @@
 # Roman Coin Atlas
 
-Roman Coin Atlas is a local-first CS50P final project foundation for researching
-and cataloguing Roman imperial coin types. It currently provides a Flask health
-endpoint, shared input-normalization helpers, and a local SQLite schema. It
-does not import reference data or search OCRE yet.
+Roman Coin Atlas is a local-first CS50P final project for researching and
+cataloguing Roman imperial coin types. It includes a Flask health endpoint,
+local SQLite storage, and a bounded import pipeline for verified OCRE reference
+types.
 
 ## Requirements
 
 - Python 3.12 or later
 - Internet access only for installing dependencies (the test suite is local)
 
-## Installation
+## Quickstart for Windows
 
-Create and activate a virtual environment, then install the project
-dependencies:
+The easiest way to prepare and launch the application is:
+
+```powershell
+.\quickstart.bat
+```
+
+The script creates `.venv` when necessary, installs dependencies, runs all
+tests, initializes the local SQLite database, and starts Flask at
+`http://127.0.0.1:5000`. Stop the local server with `Ctrl+C`.
+
+To perform the same preparation without keeping a server process open, use:
+
+```powershell
+.\quickstart.bat --no-serve
+```
+
+## Manual setup (step by step)
+
+Follow these steps instead of the Quickstart when you prefer to control each
+command separately.
+
+### 1. Create and activate the virtual environment
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\Activate.ps1
+```
+
+If Python 3.12 is not installed but another Python version newer than 3.12 is,
+use `py -3` in the first command.
+
+### 2. Install dependencies
+
+```powershell
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
@@ -25,7 +53,7 @@ python -m pip install -r requirements.txt
 On macOS or Linux, activate the environment with `source .venv/bin/activate`
 instead.
 
-## Run the tests
+### 3. Run the tests
 
 ```powershell
 python -m pytest
@@ -33,10 +61,19 @@ python -m pytest
 
 The tests use only local code and do not make HTTP requests.
 
-## Launch the application
+### 4. Initialize the local database
 
 ```powershell
-python project.py
+python project.py init-db
+```
+
+The command is repeatable: it creates missing tables and indexes but does not
+import external data.
+
+### 5. Launch the application
+
+```powershell
+python project.py serve
 ```
 
 Flask starts a local development server (normally at
@@ -45,15 +82,6 @@ opening `http://127.0.0.1:5000/health`, which returns:
 
 ```json
 {"service":"roman-coin-atlas","status":"ok"}
-```
-
-## Initialize the local database
-
-The following command is repeatable: it creates missing tables and indexes but
-does not import any external data.
-
-```powershell
-python project.py init-db
 ```
 
 Use a different SQLite file when needed:
