@@ -1,9 +1,9 @@
 # Roman Coin Atlas
 
 Roman Coin Atlas is a local-first CS50P final project foundation for researching
-and cataloguing Roman imperial coin types. Phase 1 deliberately provides only
-the application skeleton and shared input-normalization helpers. It does not
-import reference data, search OCRE, or store user specimens yet.
+and cataloguing Roman imperial coin types. It currently provides a Flask health
+endpoint, shared input-normalization helpers, and a local SQLite schema. It
+does not import reference data or search OCRE yet.
 
 ## Requirements
 
@@ -47,16 +47,40 @@ opening `http://127.0.0.1:5000/health`, which returns:
 {"service":"roman-coin-atlas","status":"ok"}
 ```
 
+## Initialize the local database
+
+The following command is repeatable: it creates missing tables and indexes but
+does not import any external data.
+
+```powershell
+python project.py init-db
+```
+
+Use a different SQLite file when needed:
+
+```powershell
+python project.py init-db --database .\database\catalog.sqlite
+```
+
+Dates are stored as integers: BCE years are negative, CE years are positive,
+and year zero is invalid. For example, `-27` means 27 BCE and `14` means 14 CE.
+
+`coin_types` contains externally sourced reference records and is intentionally
+read-only through the normal specimen-management repository API. `found_coins`
+contains user-entered specimens and may have no reference identification at all.
+Specimen photographs are held separately in `coin_images`, with `obverse` and
+`reverse` side values.
+
 ## Project layout
 
 ```text
 project.py       Flask entry point and CS50P helper functions
 test_project.py  Unit tests for the helper functions
-database/        Reserved for local SQLite databases (not committed)
-services/        Reserved for application service modules
+database/        SQLite schema, repository API, and synthetic test fixtures
+services/        Reserved for future application service modules
 templates/       Reserved for server-rendered HTML templates
 static/          Reserved for CSS, JavaScript, and image assets
-tests/           Reserved for additional test modules and fixtures
+tests/           Repository tests using temporary SQLite databases
 ```
 
 ## Data and source policy
@@ -64,4 +88,6 @@ tests/           Reserved for additional test modules and fixtures
 Future external reference data will remain separate from user-entered
 specimens. External inputs will be treated as untrusted, and each data source
 will receive appropriate attribution and licensing review before it is added.
-No third-party numismatic records or images are included in this phase.
+The fixture records in `database/fixtures.py` are explicitly synthetic test
+data, not RIC records or historical claims. No third-party numismatic records
+or images are included in this phase.
