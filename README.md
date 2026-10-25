@@ -1,8 +1,23 @@
-# Roman Coin Atlas
+# Mundus Nummorum Romanorum
 
-Roman Coin Atlas is a local-first CS50P final project for researching and
-cataloguing Roman imperial coin types. It includes a Flask health endpoint,
-local SQLite storage, and an import pipeline for verified OCRE reference types.
+#### Video Demo: https://youtu.be/Co8RhIjoL6c
+
+#### Description:
+
+Mundus Nummorum Romanorum (Roman Coin Atlas) is a local-first CS50P final
+project for Roman coin identification and numismatic research. It combines a
+Flask web application, local SQLite storage, and an import pipeline for
+verified Online Coins of the Roman Empire (OCRE) reference types.
+
+## Purpose and research scope
+
+The application helps a researcher compare Roman imperial coin types without
+altering the historical source record. The search form and JSON API can match
+Latin inscriptions (legends), obverse and reverse descriptions, authorities,
+mints, and RIC reference text. They can also narrow results by historical
+period, material, denomination, authority, and mint. Every imported type
+retains its canonical OCRE ID and a link back to its source record, so search
+results remain traceable during numismatic research.
 
 ## Requirements
 
@@ -98,7 +113,7 @@ contains user-entered specimens and may have no reference identification at all.
 Specimen photographs are held separately in `coin_images`, with `obverse` and
 `reverse` side values.
 
-## Import the OCRE catalog
+## OCRE and RIC reference data
 
 After reviewing the source policy in [docs/SOURCES.md](docs/SOURCES.md), use
 the complete import for a searchable OCRE catalog:
@@ -124,6 +139,12 @@ The command is idempotent: a second run retains the original imported metadata
 and reports existing canonical OCRE IDs as duplicates. It stores no remote
 coin images. If OCRE is unavailable or returns malformed XML, the command exits
 with an error rather than claiming a successful import.
+
+OCRE supplies the imported numismatic reference data. Its canonical record IDs
+and original-reference fields can contain Roman Imperial Coinage (RIC)
+references, which the application preserves and searches as source metadata.
+The project does not bundle an independent RIC corpus or present the reading
+aids as new, citable RIC translations.
 
 ## Representative coin images
 
@@ -169,9 +190,10 @@ project.py       Flask entry point and CS50P helper functions
 test_project.py  Unit tests for the helper functions
 database/        SQLite schema, repository API, and synthetic test fixtures
 services/        External-source adapters and import workflows
-templates/       Reserved for server-rendered HTML templates
-static/          Reserved for CSS, JavaScript, and image assets
+templates/       Server-rendered search, result, detail, and error templates
+static/          CSS, JavaScript, and image assets for the web interface
 tests/           Repository tests using temporary SQLite databases
+docs/SOURCES.md  OCRE endpoints, provenance, and licensing policy
 ```
 
 ## Data and source policy
@@ -184,3 +206,19 @@ data, not RIC records or historical claims. No third-party numismatic records
 or images are bulk-distributed in this phase. The separate OCRE fixture is a
 captured, licensed source response used only for parser tests; see
 `docs/SOURCES.md`.
+
+## Design decisions and known limitations
+
+The application is local-first: SQLite keeps the catalog on the researcher's
+machine, while OCRE imports are explicit, resumable operations. Imported source
+fields are preserved instead of silently normalizing historical text; English
+shows the source description, and German provides only a clearly labelled,
+rule-based reading aid for legends and frequent image-description terms.
+
+An initialized database starts without imported reference types, so users must
+run an OCRE import before catalog searches return external coin data. Importing
+OCRE records and requesting representative previews require network access;
+the automated tests do not. Representative images remain at their credited
+institutions and are neither downloaded nor stored by this project. Finally,
+the application is a research and reading aid, not a substitute for a
+scholarly attribution, authentication, or an independent RIC edition.
