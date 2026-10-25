@@ -71,13 +71,28 @@ contains user-entered specimens and may have no reference identification at all.
 Specimen photographs are held separately in `coin_images`, with `obverse` and
 `reverse` side values.
 
+## Import an OCRE pilot catalog
+
+After reviewing the source policy in [docs/SOURCES.md](docs/SOURCES.md), import
+up to 200 real OCRE RIC types. The default pilot requests 100 records from
+OCRE's documented Atom feed and NUDS/XML API:
+
+```powershell
+python project.py import-ocre --limit 100
+```
+
+The command is idempotent: a second run retains the original imported metadata
+and reports existing canonical OCRE IDs as duplicates. It stores no remote
+coin images. If OCRE is unavailable or returns malformed XML, the command exits
+with an error rather than claiming a successful import.
+
 ## Project layout
 
 ```text
 project.py       Flask entry point and CS50P helper functions
 test_project.py  Unit tests for the helper functions
 database/        SQLite schema, repository API, and synthetic test fixtures
-services/        Reserved for future application service modules
+services/        External-source adapters and import workflows
 templates/       Reserved for server-rendered HTML templates
 static/          Reserved for CSS, JavaScript, and image assets
 tests/           Repository tests using temporary SQLite databases
@@ -90,4 +105,6 @@ specimens. External inputs will be treated as untrusted, and each data source
 will receive appropriate attribution and licensing review before it is added.
 The fixture records in `database/fixtures.py` are explicitly synthetic test
 data, not RIC records or historical claims. No third-party numismatic records
-or images are included in this phase.
+or images are bulk-distributed in this phase. The separate OCRE fixture is a
+captured, licensed source response used only for parser tests; see
+`docs/SOURCES.md`.

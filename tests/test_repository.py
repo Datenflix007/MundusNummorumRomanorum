@@ -34,6 +34,51 @@ def test_initialize_database_is_repeatable_and_creates_required_tables(tmp_path:
     assert {"coin_types", "found_coins", "coin_images"}.issubset(tables)
 
 
+def test_initialize_database_migrates_phase_two_coin_types(tmp_path: Path) -> None:
+    database_path = tmp_path / "phase-two.sqlite"
+    with sqlite3.connect(database_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE coin_types (
+                id INTEGER PRIMARY KEY,
+                external_id TEXT NOT NULL UNIQUE,
+                reference_label TEXT NOT NULL,
+                authority TEXT NOT NULL,
+                mint TEXT,
+                denomination TEXT,
+                material TEXT NOT NULL,
+                date_start INTEGER NOT NULL,
+                date_end INTEGER NOT NULL,
+                obverse_legend TEXT,
+                reverse_legend TEXT,
+                obverse_description TEXT,
+                reverse_description TEXT,
+                source_url TEXT NOT NULL,
+                obverse_image_url TEXT,
+                reverse_image_url TEXT,
+                image_attribution TEXT,
+                image_license TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            INSERT INTO coin_types (
+                external_id, reference_label, authority, material, date_start, date_end, source_url
+            ) VALUES ('legacy-type', 'Legacy test type', 'Legacy authority', 'bronze', 1, 2, 'https://example.invalid');
+            """
+        )
+
+    initialize_database(database_path)
+    repository = CoinRepository(database_path)
+    migrated = repository.get_coin_type_by_external_id("legacy-type")
+
+    assert migrated is not None
+    assert migrated.source_name == "Unspecified"
+    assert migrated.original_reference == "Legacy test type"
+    with sqlite3.connect(database_path) as connection:
+        date_start = connection.execute("PRAGMA table_info(coin_types)").fetchall()[7]
+    assert date_start[3] == 0
+
+
 def test_reference_coin_types_are_retrievable_but_not_editable(repository: CoinRepository) -> None:
     inserted = [repository.insert_coin_type(coin_type) for coin_type in SYNTHETIC_COIN_TYPES]
 

@@ -8,7 +8,8 @@ from typing import Final, Sequence
 
 from flask import Flask, jsonify
 
-from database.repository import initialize_database
+from database.repository import CoinRepository, initialize_database
+from services.ocre import OcreError, OcreImportService, OcreSourceAdapter
 
 
 MATERIAL_ALIASES: Final[dict[str, str]] = {
@@ -84,6 +85,20 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="SQLite database path (default: database/roman_coin_atlas.sqlite)",
     )
 
+    import_ocre_parser = subcommands.add_parser("import-ocre", help="Import a bounded pilot from OCRE NUDS/XML.")
+    import_ocre_parser.add_argument(
+        "--database",
+        type=Path,
+        default=DEFAULT_DATABASE_PATH,
+        help="SQLite database path (default: database/roman_coin_atlas.sqlite)",
+    )
+    import_ocre_parser.add_argument(
+        "--limit",
+        type=int,
+        default=100,
+        help="Number of OCRE records to request from the documented feed (1-200; default: 100).",
+    )
+
     serve_parser = subcommands.add_parser("serve", help="Run the local Flask development server.")
     serve_parser.add_argument("--host", default="127.0.0.1")
     serve_parser.add_argument("--port", type=int, default=5000)
@@ -92,6 +107,19 @@ def main(argv: Sequence[str] | None = None) -> None:
     if arguments.command == "init-db":
         database_path = initialize_database(arguments.database)
         print(f"Database schema is ready at {database_path}")
+        return
+    if arguments.command == "import-ocre":
+        repository_path = initialize_database(arguments.database)
+        try:
+            discovered_ids, records = OcreSourceAdapter().fetch_pilot(arguments.limit)
+        except (OcreError, ValueError) as error:
+            parser.exit(1, f"OCRE import failed: {error}\n")
+        report = OcreImportService(CoinRepository(repository_path)).import_records(discovered_ids, records)
+        print(
+            "OCRE import completed: "
+            f"{report.imported} imported, {report.duplicates} already present, "
+            f"{report.parsed} parsed from {report.discovered} discovered records."
+        )
         return
 
     app = create_app()

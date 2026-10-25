@@ -11,6 +11,36 @@ from typing import Iterator
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
 
+COIN_TYPES_REPLACEMENT_SQL = """
+CREATE TABLE coin_types_replacement (
+    id INTEGER PRIMARY KEY,
+    external_id TEXT NOT NULL UNIQUE,
+    reference_label TEXT NOT NULL,
+    authority TEXT,
+    mint TEXT,
+    denomination TEXT,
+    material TEXT,
+    date_start INTEGER CHECK (date_start IS NULL OR date_start <> 0),
+    date_end INTEGER CHECK (date_end IS NULL OR date_end <> 0),
+    obverse_legend TEXT,
+    reverse_legend TEXT,
+    obverse_description TEXT,
+    reverse_description TEXT,
+    source_url TEXT NOT NULL,
+    source_name TEXT NOT NULL DEFAULT 'Unspecified',
+    original_reference TEXT,
+    source_attribution TEXT,
+    source_license TEXT,
+    obverse_image_url TEXT,
+    reverse_image_url TEXT,
+    image_attribution TEXT,
+    image_license TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (date_start IS NULL OR date_end IS NULL OR date_start <= date_end)
+)
+"""
+
 
 @dataclass(frozen=True)
 class CoinTypeInput:
@@ -18,10 +48,10 @@ class CoinTypeInput:
 
     external_id: str
     reference_label: str
-    authority: str
-    material: str
-    date_start: int
-    date_end: int
+    authority: str | None
+    material: str | None
+    date_start: int | None
+    date_end: int | None
     source_url: str
     mint: str | None = None
     denomination: str | None = None
@@ -33,6 +63,10 @@ class CoinTypeInput:
     reverse_image_url: str | None = None
     image_attribution: str | None = None
     image_license: str | None = None
+    source_name: str = "Unspecified"
+    original_reference: str | None = None
+    source_attribution: str | None = None
+    source_license: str | None = None
 
 
 @dataclass(frozen=True)
@@ -42,10 +76,10 @@ class CoinType:
     id: int
     external_id: str
     reference_label: str
-    authority: str
-    material: str
-    date_start: int
-    date_end: int
+    authority: str | None
+    material: str | None
+    date_start: int | None
+    date_end: int | None
     source_url: str
     mint: str | None
     denomination: str | None
@@ -57,6 +91,10 @@ class CoinType:
     reverse_image_url: str | None
     image_attribution: str | None
     image_license: str | None
+    source_name: str
+    original_reference: str | None
+    source_attribution: str | None
+    source_license: str | None
 
 
 @dataclass(frozen=True)
@@ -115,9 +153,67 @@ def initialize_database(database_path: str | Path) -> Path:
     connection = _connect(path)
     try:
         connection.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        _migrate_coin_types_if_needed(connection)
+        connection.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
     finally:
         connection.close()
     return path
+
+
+def _migrate_coin_types_if_needed(connection: sqlite3.Connection) -> None:
+    """Upgrade Phase 2 databases while preserving local type identifiers and links."""
+    columns = {
+        row["name"]: row
+        for row in connection.execute("PRAGMA table_info(coin_types)").fetchall()
+    }
+    requires_rebuild = (
+        "source_name" not in columns
+        or columns["authority"]["notnull"]
+        or columns["material"]["notnull"]
+        or columns["date_start"]["notnull"]
+        or columns["date_end"]["notnull"]
+    )
+    if not requires_rebuild:
+        return
+
+    def existing_or_default(column: str, default_sql: str) -> str:
+        return column if column in columns else default_sql
+
+    connection.execute("PRAGMA foreign_keys = OFF")
+    try:
+        connection.execute("BEGIN")
+        connection.execute(COIN_TYPES_REPLACEMENT_SQL)
+        connection.execute(
+            f"""
+            INSERT INTO coin_types_replacement (
+                id, external_id, reference_label, authority, mint, denomination,
+                material, date_start, date_end, obverse_legend, reverse_legend,
+                obverse_description, reverse_description, source_url, source_name,
+                original_reference, source_attribution, source_license,
+                obverse_image_url, reverse_image_url, image_attribution, image_license,
+                created_at, updated_at
+            )
+            SELECT
+                id, external_id, reference_label, authority, mint, denomination,
+                material, date_start, date_end, obverse_legend, reverse_legend,
+                obverse_description, reverse_description, source_url,
+                {existing_or_default('source_name', "'Unspecified'")},
+                {existing_or_default('original_reference', 'reference_label')},
+                {existing_or_default('source_attribution', 'NULL')},
+                {existing_or_default('source_license', 'NULL')},
+                obverse_image_url, reverse_image_url, image_attribution, image_license,
+                created_at, updated_at
+            FROM coin_types
+            """
+        )
+        connection.execute("DROP TABLE coin_types")
+        connection.execute("ALTER TABLE coin_types_replacement RENAME TO coin_types")
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        connection.execute("PRAGMA foreign_keys = ON")
 
 
 def _connect(database_path: Path) -> sqlite3.Connection:
@@ -164,8 +260,9 @@ class CoinRepository:
                     external_id, reference_label, authority, mint, denomination,
                     material, date_start, date_end, obverse_legend, reverse_legend,
                     obverse_description, reverse_description, source_url,
+                    source_name, original_reference, source_attribution, source_license,
                     obverse_image_url, reverse_image_url, image_attribution, image_license
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     coin_type.external_id,
@@ -181,6 +278,10 @@ class CoinRepository:
                     coin_type.obverse_description,
                     coin_type.reverse_description,
                     coin_type.source_url,
+                    coin_type.source_name,
+                    coin_type.original_reference,
+                    coin_type.source_attribution,
+                    coin_type.source_license,
                     coin_type.obverse_image_url,
                     coin_type.reverse_image_url,
                     coin_type.image_attribution,
@@ -193,6 +294,53 @@ class CoinRepository:
             raise RuntimeError("Inserted coin type could not be retrieved.")
         return inserted
 
+    def insert_coin_type_if_new(self, coin_type: CoinTypeInput) -> tuple[CoinType, bool]:
+        """Insert an external type once, preserving existing imported data on repeats."""
+        with _transaction(self.database_path) as connection:
+            existing = self.get_coin_type_by_external_id(coin_type.external_id, connection=connection)
+            if existing is not None:
+                return existing, False
+
+            cursor = connection.execute(
+                """
+                INSERT INTO coin_types (
+                    external_id, reference_label, authority, mint, denomination,
+                    material, date_start, date_end, obverse_legend, reverse_legend,
+                    obverse_description, reverse_description, source_url,
+                    source_name, original_reference, source_attribution, source_license,
+                    obverse_image_url, reverse_image_url, image_attribution, image_license
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    coin_type.external_id,
+                    coin_type.reference_label,
+                    coin_type.authority,
+                    coin_type.mint,
+                    coin_type.denomination,
+                    coin_type.material,
+                    coin_type.date_start,
+                    coin_type.date_end,
+                    coin_type.obverse_legend,
+                    coin_type.reverse_legend,
+                    coin_type.obverse_description,
+                    coin_type.reverse_description,
+                    coin_type.source_url,
+                    coin_type.source_name,
+                    coin_type.original_reference,
+                    coin_type.source_attribution,
+                    coin_type.source_license,
+                    coin_type.obverse_image_url,
+                    coin_type.reverse_image_url,
+                    coin_type.image_attribution,
+                    coin_type.image_license,
+                ),
+            )
+            inserted = self.get_coin_type(cursor.lastrowid, connection=connection)
+
+        if inserted is None:
+            raise RuntimeError("Imported coin type could not be retrieved.")
+        return inserted, True
+
     def get_coin_type(self, coin_type_id: int, *, connection: sqlite3.Connection | None = None) -> CoinType | None:
         """Retrieve a reference type by its local identifier."""
         if connection is not None:
@@ -201,6 +349,18 @@ class CoinRepository:
 
         with _transaction(self.database_path) as open_connection:
             row = open_connection.execute("SELECT * FROM coin_types WHERE id = ?", (coin_type_id,)).fetchone()
+        return _coin_type_from_row(row) if row else None
+
+    def get_coin_type_by_external_id(
+        self, external_id: str, *, connection: sqlite3.Connection | None = None
+    ) -> CoinType | None:
+        """Retrieve a reference type by its source-controlled canonical identifier."""
+        if connection is not None:
+            row = connection.execute("SELECT * FROM coin_types WHERE external_id = ?", (external_id,)).fetchone()
+            return _coin_type_from_row(row) if row else None
+
+        with _transaction(self.database_path) as open_connection:
+            row = open_connection.execute("SELECT * FROM coin_types WHERE external_id = ?", (external_id,)).fetchone()
         return _coin_type_from_row(row) if row else None
 
     def list_coin_types(self) -> list[CoinType]:
@@ -364,6 +524,10 @@ def _coin_type_from_row(row: sqlite3.Row) -> CoinType:
         reverse_image_url=row["reverse_image_url"],
         image_attribution=row["image_attribution"],
         image_license=row["image_license"],
+        source_name=row["source_name"],
+        original_reference=row["original_reference"],
+        source_attribution=row["source_attribution"],
+        source_license=row["source_license"],
     )
 
 
