@@ -6,23 +6,28 @@ CREATE TABLE IF NOT EXISTS coin_types (
     id INTEGER PRIMARY KEY,
     external_id TEXT NOT NULL UNIQUE,
     reference_label TEXT NOT NULL,
-    authority TEXT NOT NULL,
+    authority TEXT,
     mint TEXT,
     denomination TEXT,
-    material TEXT NOT NULL,
-    date_start INTEGER NOT NULL CHECK (date_start <> 0),
-    date_end INTEGER NOT NULL CHECK (date_end <> 0 AND date_start <= date_end),
+    material TEXT,
+    date_start INTEGER CHECK (date_start IS NULL OR date_start <> 0),
+    date_end INTEGER CHECK (date_end IS NULL OR date_end <> 0),
     obverse_legend TEXT,
     reverse_legend TEXT,
     obverse_description TEXT,
     reverse_description TEXT,
     source_url TEXT NOT NULL,
+    source_name TEXT NOT NULL DEFAULT 'Unspecified',
+    original_reference TEXT,
+    source_attribution TEXT,
+    source_license TEXT,
     obverse_image_url TEXT,
     reverse_image_url TEXT,
     image_attribution TEXT,
     image_license TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (date_start IS NULL OR date_end IS NULL OR date_start <= date_end)
 );
 
 CREATE TABLE IF NOT EXISTS found_coins (

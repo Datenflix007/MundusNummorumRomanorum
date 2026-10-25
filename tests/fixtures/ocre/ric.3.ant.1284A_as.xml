@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?><nuds xmlns="http://nomisma.org/nuds" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:tei="http://www.tei-c.org/ns/1.0" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xlink="http://www.w3.org/1999/xlink" xsi:schemaLocation="http://nomisma.org/nuds http://nomisma.org/nuds.xsd" recordType="conceptual">
+    <control>
+        <recordId>ric.3.ant.1284A_as</recordId>
+        <otherRecordId localType="typeNumber">1284A_as</otherRecordId>
+        <otherRecordId localType="sortId">018.1284A_as</otherRecordId>
+        <publicationStatus>approved</publicationStatus>
+        <maintenanceStatus>derived</maintenanceStatus>
+        <maintenanceAgency>
+            <agencyName>American Numismatic Society</agencyName>
+        </maintenanceAgency>
+        <maintenanceHistory>
+            <maintenanceEvent>
+                <eventType>derived</eventType>
+                <eventDateTime standardDateTime="2025-12-19T21:16:22+00:00">Fri, 19 Dec 2025 21:16:22 +0000</eventDateTime>
+                <agentType>machine</agentType>
+                <agent>PHP</agent>
+                <eventDescription>Generated from CSV from ANS Curatorial Google Drive.</eventDescription>
+                <source>https://docs.google.com/spreadsheets/d/e/2PACX-1vSw_0jhpJbDNChzATBnYFs-KYo9xJh6SQyyQu25su8xi1p-DcypX5nL88OedzRrQG-oeVokuWeV-A5D/pub?gid=0&amp;single=true&amp;output=csv</source>
+            </maintenanceEvent>
+        </maintenanceHistory>
+        <rightsStmt>
+            <copyrightHolder>American Numismatic Society</copyrightHolder>
+            <license xlink:type="simple" xlink:href="http://opendatacommons.org/licenses/odbl/"/>
+        </rightsStmt>
+    </control>
+    <descMeta>
+        <title xml:lang="en">RIC III Antoninus Pius 1284A (as)</title>
+        <typeDesc>
+            <objectType xlink:type="simple" xlink:href="http://nomisma.org/id/coin">Coin</objectType>
+            <dateRange>
+                <fromDate standardDate="0148">148 CE</fromDate>
+                <toDate standardDate="0149">149 CE</toDate>
+            </dateRange>
+            <denomination xlink:type="simple" xlink:href="http://nomisma.org/id/as">As</denomination>
+            <manufacture xlink:type="simple" xlink:href="http://nomisma.org/id/struck">Struck</manufacture>
+            <material xlink:type="simple" xlink:href="http://nomisma.org/id/ae">Bronze</material>
+            <authority>
+                <persname xlink:type="simple" xlink:role="authority" xlink:href="http://nomisma.org/id/antoninus_pius">Antoninus Pius</persname>
+            </authority>
+            <geographic>
+                <geogname xlink:type="simple" xlink:role="mint" xlink:href="http://nomisma.org/id/rome">Rome</geogname>
+            </geographic>
+            <obverse>
+                <legend>AVRELIVS CAESAR ANTONINI AVG PII F</legend>
+                <type><description xml:lang="en">Bust of Marcus Aurelius, bare, right</description></type>
+            </obverse>
+            <reverse>
+                <legend>TR POT III COS II S C</legend>
+                <type><description xml:lang="en">Minerva, standing right, holding spear and leaning on shield</description></type>
+            </reverse>
+        </typeDesc>
+    </descMeta>
+</nuds>
