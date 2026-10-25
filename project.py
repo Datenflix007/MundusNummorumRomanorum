@@ -7,11 +7,12 @@ from time import monotonic
 from pathlib import Path
 from typing import Final, Sequence
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, url_for
 
 from database.repository import CoinRepository, DatabaseRequestError, initialize_database
 from services.ocre import OcreCoinTypeRecord, OcreError, OcreImportService, OcreSourceAdapter
 from services.ocre_images import OcreImageAdapter, OcreImageError
+from services.reading_aids import build_reading_aid, normalize_language
 from services.search import SearchValidationError, normalize_search_keyword, parse_search_parameters
 
 
@@ -73,6 +74,11 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     app.config["OCRE_IMAGE_ADAPTER_FACTORY"] = OcreImageAdapter
     app.extensions["ocre_image_preview_cache"] = {}
 
+    @app.context_processor
+    def inject_ui_language() -> dict[str, object]:
+        """Keep the language selection available to every server-rendered page."""
+        return {"ui_language": _ui_language(), "language_url": _language_url}
+
     @app.get("/health")
     def health() -> tuple[object, int]:
         return jsonify(status="ok", service="roman-coin-atlas"), 200
@@ -101,6 +107,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             page_number=page_number,
             page_count=(results.total + criteria.limit - 1) // criteria.limit,
             limit=criteria.limit,
+            reading_aids={
+                coin_type.id: build_reading_aid(
+                    coin_type.obverse_description, coin_type.reverse_description, _ui_language()
+                )
+                for coin_type in results.items
+            },
         )
 
     @app.get("/coins/<int:coin_type_id>")
@@ -182,6 +194,19 @@ def _search_filters(arguments: object) -> dict[str, str]:
     """Keep submitted form values visible without normalizing source catalog text."""
     allowed_names = ("q", "start_year", "end_year", "material", "denomination", "authority", "mint", "sort", "order")
     return {name: getattr(arguments, "get")(name, "") for name in allowed_names}
+
+
+def _ui_language() -> str:
+    """Read the optional display language without influencing source fields."""
+    return normalize_language(request.args.get("lang"))
+
+
+def _language_url(language: str) -> str:
+    """Build a link that changes only the server-rendered UI language."""
+    values = dict(request.view_args or {})
+    values.update(request.args.to_dict(flat=True))
+    values["lang"] = normalize_language(language)
+    return url_for(request.endpoint or "search_page", **values)
 
 
 def _serialize_coin_type(coin_type: object) -> dict[str, object]:

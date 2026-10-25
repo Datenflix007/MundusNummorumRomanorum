@@ -49,6 +49,8 @@ def test_search_page_has_labeled_accessible_filters(web_client) -> None:
     assert 'static/styles.css' in page
     assert "Searches external RIC reference data from OCRE" in page
     assert "Local research tool" not in page
+    assert 'name="lang" value="en"' in page
+    assert 'lang="en"' in page
 
 
 def test_results_page_renders_compact_coin_card_and_placeholder(web_client) -> None:
@@ -62,6 +64,21 @@ def test_results_page_renders_compact_coin_card_and_placeholder(web_client) -> N
     assert "IMP CAESAR" in page
     assert "No image available" in page
     assert "/coins/1" in page
+    assert "Roma seated left" in page
+    assert "OCRE source description" in page
+
+
+def test_results_page_localizes_the_right_hand_reading_aid_and_preserves_language_links(web_client) -> None:
+    response = web_client.get("/results?q=caesar&material=bronze&lang=de")
+    page = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert '<html lang="de">' in page
+    assert "Revers" in page
+    assert "Roma nach links sitzend" in page
+    assert "Automatische Lesehilfe" in page
+    assert "/coins/1?lang=de" in page
+    assert 'aria-current="true">DE' in page
 
 
 def test_coin_detail_page_renders_full_metadata_and_external_reference(web_client) -> None:

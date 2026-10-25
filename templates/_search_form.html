@@ -1,4 +1,5 @@
 <form class="search-form" action="{{ url_for('results_page') }}" method="get" data-search-form>
+  <input type="hidden" name="lang" value="{{ ui_language }}">
   <div class="form-status" data-search-status aria-live="polite"></div>
   <div class="field field-wide">
     <label for="q">Keyword</label>
@@ -19,5 +20,5 @@
     <div class="field"><label for="authority">Authority</label><input id="authority" name="authority" value="{{ filters.authority }}" placeholder="e.g. Augustus"></div>
     <div class="field"><label for="mint">Mint</label><input id="mint" name="mint" value="{{ filters.mint }}" placeholder="e.g. Rome"></div>
   </div>
-  <div class="form-actions"><button type="submit">Search catalog</button><a class="button-secondary" href="{{ url_for('search_page') }}">Clear filters</a></div>
+  <div class="form-actions"><button type="submit">Search catalog</button><a class="button-secondary" href="{{ url_for('search_page', lang=ui_language) }}">Clear filters</a></div>
 </form>
