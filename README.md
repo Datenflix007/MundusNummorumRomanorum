@@ -2,8 +2,7 @@
 
 Roman Coin Atlas is a local-first CS50P final project for researching and
 cataloguing Roman imperial coin types. It includes a Flask health endpoint,
-local SQLite storage, and a bounded import pipeline for verified OCRE reference
-types.
+local SQLite storage, and an import pipeline for verified OCRE reference types.
 
 ## Requirements
 
@@ -99,11 +98,23 @@ contains user-entered specimens and may have no reference identification at all.
 Specimen photographs are held separately in `coin_images`, with `obverse` and
 `reverse` side values.
 
-## Import an OCRE pilot catalog
+## Import the OCRE catalog
 
-After reviewing the source policy in [docs/SOURCES.md](docs/SOURCES.md), import
-up to 200 real OCRE RIC types. The default pilot requests 100 records from
-OCRE's documented Atom feed and NUDS/XML API:
+After reviewing the source policy in [docs/SOURCES.md](docs/SOURCES.md), use
+the complete import for a searchable OCRE catalog:
+
+```powershell
+python project.py import-ocre --full
+```
+
+It follows OCRE's own paginated Atom feed through the final server-provided
+page, then retrieves each type's canonical NUDS/XML in bounded batches. The
+official RDF dump named in OCRE's VoID metadata is a network fallback. This
+can take substantial time. The import is resumable and idempotent, so it is
+safe to run again after a network interruption.
+
+For a quick local smoke test, the default remains a 100-record pilot from the
+documented Atom feed (or supply up to 200 records explicitly):
 
 ```powershell
 python project.py import-ocre --limit 100

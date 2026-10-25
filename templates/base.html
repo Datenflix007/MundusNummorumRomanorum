@@ -14,12 +14,11 @@
     <div class="shell header-inner">
       <a class="brand" href="{{ url_for('search_page') }}" aria-label="Roman Coin Atlas home">
         <span class="brand-mark" aria-hidden="true">R</span>
-        <span><strong>Roman Coin Atlas</strong><small>Imperial coin type research</small></span>
+        <span><strong>Roman Coin Atlas</strong><small>Searches external RIC reference data from OCRE</small></span>
       </a>
       <nav aria-label="Primary navigation"><a href="{{ url_for('search_page') }}">Search</a></nav>
     </div>
   </header>
   <main id="main-content" class="shell">{% block content %}{% endblock %}</main>
-  <footer class="site-footer"><div class="shell">Local research tool · Reference data retains its source attribution.</div></footer>
 </body>
 </html>
