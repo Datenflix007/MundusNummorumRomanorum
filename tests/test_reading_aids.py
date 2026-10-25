@@ -9,7 +9,7 @@ def test_normalize_language_defaults_to_english_for_unknown_values() -> None:
     assert normalize_language(None) == "en"
 
 
-def test_reading_aid_translates_both_legends_and_keeps_both_ocra_descriptions() -> None:
+def test_reading_aid_pairs_each_legend_and_ocra_description_by_side() -> None:
     reading_aid = build_reading_aid(
         "IMP CAESAR AVGVSTV",
         "P CARISIVS LEG PRO PR EMERITA",
@@ -19,13 +19,11 @@ def test_reading_aid_translates_both_legends_and_keeps_both_ocra_descriptions() 
     )
 
     assert reading_aid is not None
-    assert [legend.title for legend in reading_aid.legends] == ["Obverse legend", "Reverse legend"]
-    assert reading_aid.legends[0].text == "imperator Caesar Augustus"
-    assert reading_aid.legends[1].text == "Publius Carisius legate pro-praetor Emerita"
-    assert [description.text for description in reading_aid.descriptions] == [
-        "Head of Augustus, bare, right",
-        "City wall, gateway",
-    ]
+    assert [side.title for side in reading_aid.sides] == ["Obverse", "Reverse"]
+    assert reading_aid.sides[0].legend_text == "imperator Caesar Augustus"
+    assert reading_aid.sides[0].description_text == "Head of Augustus, bare, right"
+    assert reading_aid.sides[1].legend_text == "Publius Carisius legate pro-praetor Emerita"
+    assert reading_aid.sides[1].description_text == "City wall, gateway"
 
 
 def test_german_reading_aid_marks_legend_expansion_and_translates_ocra_descriptions() -> None:
@@ -38,10 +36,11 @@ def test_german_reading_aid_marks_legend_expansion_and_translates_ocra_descripti
     )
 
     assert reading_aid is not None
-    assert [legend.title for legend in reading_aid.legends] == ["Avers-Legende", "Revers-Legende"]
-    assert reading_aid.legends[0].text == "Imperator Caesar Augustus"
-    assert reading_aid.legends[1].text == "auf Senatsbeschluss"
-    assert reading_aid.descriptions[1].text == "Minerva, nach rechts stehend, haltend Speer und Schild"
+    assert [side.title for side in reading_aid.sides] == ["Avers", "Revers"]
+    assert reading_aid.legend_label == "Bedeutung der Legende"
+    assert reading_aid.sides[0].legend_text == "Imperator Caesar Augustus"
+    assert reading_aid.sides[1].legend_text == "auf Senatsbeschluss"
+    assert reading_aid.sides[1].description_text == "Minerva, nach rechts stehend, haltend Speer und Schild"
     assert reading_aid.legend_note is not None
 
 

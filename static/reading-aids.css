@@ -38,21 +38,42 @@
   font-size: .96rem;
 }
 
-.reading-aid-block + .reading-aid-block {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--line);
+.reading-aid-heading {
+  margin-bottom: .7rem;
 }
 
-.description-group {
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--line);
+.side-reading-aid {
+  padding: .85rem;
+  background: rgba(255, 253, 248, .74);
+  border: 1px solid var(--line);
 }
 
-.description-aid {
-  margin: .55rem 0 0;
-  font-size: .87rem;
+.side-reading-aid + .side-reading-aid {
+  margin-top: .7rem;
+}
+
+.side-reading-aid h4 {
+  margin: 0 0 .55rem;
+  color: var(--bronze-dark);
+  font-size: 1rem;
+}
+
+.side-reading-aid dl {
+  display: grid;
+  gap: .55rem;
+  margin: 0;
+}
+
+.side-reading-aid dt {
+  color: var(--muted);
+  font: 700 .68rem Arial, sans-serif;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.side-reading-aid dd {
+  margin: .08rem 0 0;
+  font-size: .88rem;
 }
 
 .reading-aid-note,

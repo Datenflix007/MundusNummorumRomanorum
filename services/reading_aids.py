@@ -15,29 +15,22 @@ SUPPORTED_LANGUAGES = frozenset({"de", "en"})
 
 
 @dataclass(frozen=True)
-class LegendReadingAid:
-    """A localized expansion of one stored Latin inscription."""
+class SideReadingAid:
+    """Legend meaning and OCRE motif description grouped for one coin side."""
 
     side: str
     title: str
-    text: str
-
-
-@dataclass(frozen=True)
-class DescriptionReadingAid:
-    """An available OCRE motif description for one side of a type."""
-
-    side: str
-    title: str
-    text: str
+    legend_text: str | None
+    description_text: str | None
 
 
 @dataclass(frozen=True)
 class CoinReadingAid:
-    """All legend and descriptive reading aids shown on one result card."""
+    """Side-paired reading aids shown in a compact result-card panel."""
 
-    legends: tuple[LegendReadingAid, ...]
-    descriptions: tuple[DescriptionReadingAid, ...]
+    sides: tuple[SideReadingAid, ...]
+    legend_label: str
+    description_label: str
     legend_note: str | None
     description_note: str | None
 
@@ -55,44 +48,41 @@ def build_reading_aid(
     reverse_description: str | None,
     language: str,
 ) -> CoinReadingAid | None:
-    """Build side-specific legend expansions and every available OCRE description."""
+    """Build compact, side-paired legend and OCRE description reading aids."""
     normalized_language = normalize_language(language)
-    legends = tuple(
-        LegendReadingAid(
-            side=side,
-            title=_side_title(side, normalized_language, "legend"),
-            text=translate_legend(legend, normalized_language),
-        )
-        for side, legend in (("obverse", obverse_legend), ("reverse", reverse_legend))
-        if legend
+    side_sources = (
+        ("obverse", obverse_legend, obverse_description),
+        ("reverse", reverse_legend, reverse_description),
     )
-    descriptions = tuple(
-        DescriptionReadingAid(
+    sides = tuple(
+        SideReadingAid(
             side=side,
-            title=_side_title(side, normalized_language, "description"),
-            text=(translate_ocre_description_to_german(description) if normalized_language == "de" else description),
+            title=_side_title(side, normalized_language),
+            legend_text=translate_legend(legend, normalized_language) if legend else None,
+            description_text=(translate_ocre_description_to_german(description) if normalized_language == "de" else description),
         )
-        for side, description in (("obverse", obverse_description), ("reverse", reverse_description))
-        if description
+        for side, legend, description in side_sources
+        if legend or description
     )
-    if not legends and not descriptions:
+    if not sides:
         return None
     return CoinReadingAid(
-        legends=legends,
-        descriptions=descriptions,
+        sides=sides,
+        legend_label="Bedeutung der Legende" if normalized_language == "de" else "Legend guide",
+        description_label="OCRE-Bildbeschreibung" if normalized_language == "de" else "OCRE image description",
         legend_note=(
             "Automatische Legendenauflösung; keine zitierfähige RIC-Übersetzung."
             if normalized_language == "de"
             else "Automatic legend expansion; not a citable RIC translation."
         )
-        if legends
+        if any(side.legend_text for side in sides)
         else None,
         description_note=(
             "OCRE-Bildbeschreibungen; deutsche Ausgabe als automatische Lesehilfe."
             if normalized_language == "de"
             else "OCRE source image descriptions."
         )
-        if descriptions
+        if any(side.description_text for side in sides)
         else None,
     )
 
@@ -141,22 +131,18 @@ def translate_ocre_description_to_german(description: str) -> str:
     return translated
 
 
-def _side_title(side: str, language: str, kind: str) -> str:
+def _side_title(side: str, language: str) -> str:
     titles = {
         "en": {
-            ("obverse", "legend"): "Obverse legend",
-            ("reverse", "legend"): "Reverse legend",
-            ("obverse", "description"): "OCRE obverse description",
-            ("reverse", "description"): "OCRE reverse description",
+            "obverse": "Obverse",
+            "reverse": "Reverse",
         },
         "de": {
-            ("obverse", "legend"): "Avers-Legende",
-            ("reverse", "legend"): "Revers-Legende",
-            ("obverse", "description"): "OCRE-Bildbeschreibung Avers",
-            ("reverse", "description"): "OCRE-Bildbeschreibung Revers",
+            "obverse": "Avers",
+            "reverse": "Revers",
         },
     }
-    return titles[language][(side, kind)]
+    return titles[language][side]
 
 
 def _following_tokens(tokens: list[str], start: int, expected: tuple[str, ...]) -> bool:
