@@ -102,6 +102,7 @@ class CoinSearchCriteria:
     """Normalized, validated filters for the read-only reference type catalog."""
 
     keyword: str | None = None
+    keyword_groups: tuple[tuple[str, ...], ...] = ()
     start_year: int | None = None
     end_year: int | None = None
     material: str | None = None
@@ -455,37 +456,22 @@ class CoinRepository:
         where_clauses: list[str] = []
         parameters: list[str | int] = []
 
-        if criteria.keyword:
-            keyword_columns = (
-                "obverse_legend",
-                "reverse_legend",
-                "obverse_description",
-                "reverse_description",
-                "authority",
-                "mint",
-                "reference_label",
-                "original_reference",
-                "external_id",
-            )
-            keyword_pattern = f"%{_escape_like(criteria.keyword)}%"
-            keyword_clause = " OR ".join(
-                f"LOWER(COALESCE({column}, '')) LIKE ? ESCAPE '\\'" for column in keyword_columns
-            )
-            parameters.extend([keyword_pattern] * len(keyword_columns))
-
-            compact_legend = _compact_legend_expression(criteria.keyword)
-            if compact_legend:
-                compact_pattern = f"%{_escape_like(compact_legend)}%"
-                legend_clause = " OR ".join(
-                    "REPLACE(REPLACE(REPLACE(LOWER(COALESCE("
-                    + column
-                    + ", '')), ' ', ''), '.', ''), '·', '') LIKE ? ESCAPE '\\'"
-                    for column in ("obverse_legend", "reverse_legend")
-                )
-                parameters.extend([compact_pattern, compact_pattern])
-                where_clauses.append(f"({keyword_clause} OR {legend_clause})")
-            else:
-                where_clauses.append(f"({keyword_clause})")
+        if criteria.keyword_groups:
+            keyword_groups = criteria.keyword_groups
+        elif criteria.keyword:
+            keyword_groups = ((criteria.keyword,),)
+        else:
+            keyword_groups = ()
+        if keyword_groups:
+            alternatives: list[str] = []
+            for group in keyword_groups:
+                required_terms: list[str] = []
+                for term in group:
+                    keyword_clause, keyword_parameters = _keyword_match_clause(term)
+                    required_terms.append(f"({keyword_clause})")
+                    parameters.extend(keyword_parameters)
+                alternatives.append(f"({' AND '.join(required_terms)})")
+            where_clauses.append(f"({' OR '.join(alternatives)})")
 
         for column, value in (
             ("material", criteria.material),
@@ -723,6 +709,39 @@ def _coin_image_from_row(row: sqlite3.Row) -> CoinImage:
 def _escape_like(value: str) -> str:
     """Escape SQLite LIKE metacharacters so user keywords remain literal text."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _keyword_match_clause(keyword: str) -> tuple[str, list[str]]:
+    """Return a parameterized clause that matches one keyword across catalog fields."""
+    keyword_columns = (
+        "obverse_legend",
+        "reverse_legend",
+        "obverse_description",
+        "reverse_description",
+        "authority",
+        "mint",
+        "reference_label",
+        "original_reference",
+        "external_id",
+    )
+    keyword_pattern = f"%{_escape_like(keyword)}%"
+    keyword_clause = " OR ".join(
+        f"LOWER(COALESCE({column}, '')) LIKE ? ESCAPE '\\'" for column in keyword_columns
+    )
+    parameters = [keyword_pattern] * len(keyword_columns)
+
+    compact_legend = _compact_legend_expression(keyword)
+    if not compact_legend:
+        return keyword_clause, parameters
+
+    compact_pattern = f"%{_escape_like(compact_legend)}%"
+    legend_clause = " OR ".join(
+        "REPLACE(REPLACE(REPLACE(LOWER(COALESCE("
+        + column
+        + ", '')), ' ', ''), '.', ''), '·', '') LIKE ? ESCAPE '\\'"
+        for column in ("obverse_legend", "reverse_legend")
+    )
+    return f"{keyword_clause} OR {legend_clause}", [*parameters, compact_pattern, compact_pattern]
 
 
 def _compact_legend_expression(value: str) -> str:

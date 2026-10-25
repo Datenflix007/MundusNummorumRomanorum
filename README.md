@@ -162,6 +162,17 @@ empty `items` list when no type matches, `400` for invalid query values, and
 `500` only when SQLite cannot fulfill a request. `GET /api/coins/<id>` returns
 one result with its canonical external ID and source URL.
 
+Keyword expressions can combine terms without changing source text:
+
+```text
+Vespasian && Pax       # both terms must occur (AND)
+Vespasian || Titus     # either term may occur (OR)
+```
+
+`&&` has precedence over `||`; parentheses are intentionally not supported.
+Terms remain case-insensitive, partial, literal matches, so this is not a
+fuzzy or automatic-identification feature.
+
 ## Project layout
 
 ```text

@@ -104,6 +104,28 @@ def test_keyword_search_accepts_unspaced_legend_abbreviations(catalog: CoinRepos
     assert total == 1
 
 
+@pytest.mark.parametrize("keyword", ["tiberius && pax", "pax && tiberius"])
+def test_boolean_and_keyword_search_requires_all_terms_in_any_order(catalog: CoinRepository, keyword: str) -> None:
+    items, total = _search(catalog, q=keyword)
+
+    assert items == ["ric.test.beta"]
+    assert total == 1
+
+
+def test_boolean_or_keyword_search_accepts_each_alternative(catalog: CoinRepository) -> None:
+    items, total = _search(catalog, q="augustus || pax", sort="reference")
+
+    assert items == ["ric.test.alpha", "ric.test.beta"]
+    assert total == 2
+
+
+def test_boolean_keyword_search_evaluates_and_before_or(catalog: CoinRepository) -> None:
+    items, total = _search(catalog, q="augustus || tiberius && pax", sort="reference")
+
+    assert items == ["ric.test.alpha", "ric.test.beta"]
+    assert total == 2
+
+
 def test_combined_filters_use_and_semantics(catalog: CoinRepository) -> None:
     items, total = _search(catalog, material="bronze", authority="tiberius", mint="rome", denomination="as")
 
@@ -131,6 +153,9 @@ def test_pagination_sorting_and_empty_results(catalog: CoinRepository) -> None:
         {"limit": "101"},
         {"page": "nope"},
         {"sort": "drop table"},
+        {"q": "tiberius &&"},
+        {"q": "tiberius & pax"},
+        {"q": "(tiberius || pax)"},
     ],
 )
 def test_invalid_search_parameters_return_useful_errors(parameters: dict[str, str]) -> None:
@@ -145,6 +170,13 @@ def test_sql_injection_text_is_literal_and_cannot_broaden_results(catalog: CoinR
     assert total == 0
 
 
+def test_boolean_keyword_sql_injection_text_is_literal_and_cannot_broaden_results(catalog: CoinRepository) -> None:
+    items, total = _search(catalog, q="' OR 1=1 -- && pax")
+
+    assert items == []
+    assert total == 0
+
+
 def test_coin_endpoints_return_source_data_and_distinguish_errors(catalog: CoinRepository, tmp_path: Path) -> None:
     app = create_app(catalog.database_path)
     client = app.test_client()
@@ -153,6 +185,7 @@ def test_coin_endpoints_return_source_data_and_distinguish_errors(catalog: CoinR
     detail_response = client.get("/api/coins/1")
     empty_response = client.get("/api/coins?q=not-present")
     invalid_response = client.get("/api/coins?start_year=0")
+    invalid_boolean_response = client.get("/api/coins?q=tiberius%20%26%26")
     missing_response = client.get("/api/coins/999")
     failed_request = create_app(tmp_path / "missing.sqlite").test_client().get("/api/coins")
 
@@ -165,6 +198,8 @@ def test_coin_endpoints_return_source_data_and_distinguish_errors(catalog: CoinR
     assert empty_response.json["items"] == []
     assert invalid_response.status_code == 400
     assert invalid_response.json["error"]["code"] == "invalid_query"
+    assert invalid_boolean_response.status_code == 400
+    assert invalid_boolean_response.json["error"]["code"] == "invalid_query"
     assert missing_response.status_code == 404
     assert missing_response.json["error"]["code"] == "not_found"
     assert failed_request.status_code == 500
