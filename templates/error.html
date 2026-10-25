@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block title %}Catalog error · Roman Coin Atlas{% endblock %}
+{% block content %}<section class="notice notice-error" role="alert"><h1>Catalog unavailable</h1><p>{{ message }}</p><a class="button-secondary" href="{{ url_for('search_page') }}">Return to search</a></section>{% endblock %}

@@ -1,0 +1,23 @@
+<form class="search-form" action="{{ url_for('results_page') }}" method="get" data-search-form>
+  <div class="form-status" data-search-status aria-live="polite"></div>
+  <div class="field field-wide">
+    <label for="q">Keyword</label>
+    <input id="q" name="q" type="search" value="{{ filters.q }}" placeholder="e.g. Roma, laureate bust, IMP CAESAR" autocomplete="off">
+    <p class="hint">Searches legends, descriptions, authority, mint, and RIC references.</p>
+  </div>
+  <fieldset class="field-group">
+    <legend>Date range</legend>
+    <div class="field-row">
+      <div class="field"><label for="start_year">From year</label><input id="start_year" name="start_year" inputmode="numeric" value="{{ filters.start_year }}" placeholder="e.g. -27"></div>
+      <div class="field"><label for="end_year">To year</label><input id="end_year" name="end_year" inputmode="numeric" value="{{ filters.end_year }}" placeholder="e.g. 14"></div>
+    </div>
+    <p class="hint">Negative years are BCE; positive years are CE. Year zero is not used.</p>
+  </fieldset>
+  <div class="filter-grid">
+    <div class="field"><label for="material">Material</label><select id="material" name="material"><option value="">Any material</option>{% for value in ('bronze', 'silver', 'gold', 'billon') %}<option value="{{ value }}" {% if filters.material == value %}selected{% endif %}>{{ value|title }}</option>{% endfor %}</select></div>
+    <div class="field"><label for="denomination">Denomination</label><input id="denomination" name="denomination" value="{{ filters.denomination }}" placeholder="e.g. Denarius"></div>
+    <div class="field"><label for="authority">Authority</label><input id="authority" name="authority" value="{{ filters.authority }}" placeholder="e.g. Augustus"></div>
+    <div class="field"><label for="mint">Mint</label><input id="mint" name="mint" value="{{ filters.mint }}" placeholder="e.g. Rome"></div>
+  </div>
+  <div class="form-actions"><button type="submit">Search catalog</button><a class="button-secondary" href="{{ url_for('search_page') }}">Clear filters</a></div>
+</form>

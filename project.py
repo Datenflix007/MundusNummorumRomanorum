@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 from typing import Final, Sequence
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 
 from database.repository import CoinRepository, DatabaseRequestError, initialize_database
 from services.ocre import OcreError, OcreImportService, OcreSourceAdapter
@@ -71,6 +71,42 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     def health() -> tuple[object, int]:
         return jsonify(status="ok", service="roman-coin-atlas"), 200
 
+    @app.get("/")
+    def search_page() -> str:
+        return render_template("search.html", filters=_search_filters(request.args))
+
+    @app.get("/results")
+    def results_page() -> tuple[str, int] | str:
+        filters = _search_filters(request.args)
+        try:
+            criteria, page_number = parse_search_parameters(request.args.to_dict(flat=True))
+        except SearchValidationError as error:
+            return render_template("results.html", filters=filters, error=str(error), results=None), 400
+
+        try:
+            results = CoinRepository(app.config["DATABASE_PATH"]).search_coin_types(criteria)
+        except DatabaseRequestError as error:
+            return render_template("results.html", filters=filters, error=str(error), results=None), 500
+        return render_template(
+            "results.html",
+            filters=filters,
+            error=None,
+            results=results,
+            page_number=page_number,
+            page_count=(results.total + criteria.limit - 1) // criteria.limit,
+            limit=criteria.limit,
+        )
+
+    @app.get("/coins/<int:coin_type_id>")
+    def coin_page(coin_type_id: int) -> tuple[str, int] | str:
+        try:
+            coin_type = CoinRepository(app.config["DATABASE_PATH"]).get_coin_type(coin_type_id)
+        except Exception:
+            return render_template("error.html", message="The coin catalog could not be read."), 500
+        if coin_type is None:
+            return render_template("error.html", message=f"Coin type {coin_type_id} was not found."), 404
+        return render_template("coin_detail.html", coin_type=coin_type)
+
     @app.get("/api/coins")
     def search_coins() -> tuple[object, int]:
         try:
@@ -106,6 +142,12 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         return jsonify(_serialize_coin_type(coin_type)), 200
 
     return app
+
+
+def _search_filters(arguments: object) -> dict[str, str]:
+    """Keep submitted form values visible without normalizing source catalog text."""
+    allowed_names = ("q", "start_year", "end_year", "material", "denomination", "authority", "mint", "sort", "order")
+    return {name: getattr(arguments, "get")(name, "") for name in allowed_names}
 
 
 def _serialize_coin_type(coin_type: object) -> dict[str, object]:
