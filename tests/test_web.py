@@ -64,8 +64,11 @@ def test_results_page_renders_compact_coin_card_and_placeholder(web_client) -> N
     assert "IMP CAESAR" in page
     assert "No image available" in page
     assert "/coins/1" in page
+    assert "imperator Caesar" in page
+    assert "ROMA" in page
+    assert "OCRE image descriptions" in page
+    assert "Laureate bust right" in page
     assert "Roma seated left" in page
-    assert "OCRE source description" in page
 
 
 def test_results_page_localizes_the_right_hand_reading_aid_and_preserves_language_links(web_client) -> None:
@@ -74,9 +77,12 @@ def test_results_page_localizes_the_right_hand_reading_aid_and_preserves_languag
 
     assert response.status_code == 200
     assert '<html lang="de">' in page
-    assert "Revers" in page
+    assert "Avers-Legende" in page
+    assert "Revers-Legende" in page
+    assert "Imperator Caesar" in page
     assert "Roma nach links sitzend" in page
-    assert "Automatische Lesehilfe" in page
+    assert "OCRE-Bildbeschreibungen" in page
+    assert "Automatische Legendenauflösung" in page
     assert "/coins/1?lang=de" in page
     assert 'aria-current="true">DE' in page
 

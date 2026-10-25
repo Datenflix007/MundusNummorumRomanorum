@@ -109,7 +109,11 @@ def create_app(database_path: str | Path | None = None) -> Flask:
             limit=criteria.limit,
             reading_aids={
                 coin_type.id: build_reading_aid(
-                    coin_type.obverse_description, coin_type.reverse_description, _ui_language()
+                    coin_type.obverse_legend,
+                    coin_type.reverse_legend,
+                    coin_type.obverse_description,
+                    coin_type.reverse_description,
+                    _ui_language(),
                 )
                 for coin_type in results.items
             },

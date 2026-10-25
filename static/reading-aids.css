@@ -38,6 +38,23 @@
   font-size: .96rem;
 }
 
+.reading-aid-block + .reading-aid-block {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.description-group {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.description-aid {
+  margin: .55rem 0 0;
+  font-size: .87rem;
+}
+
 .reading-aid-note,
 .reading-aid-empty {
   margin: .8rem 0 0;

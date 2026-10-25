@@ -138,11 +138,12 @@ institution's terms before reuse. See [docs/SOURCES.md](docs/SOURCES.md).
 ## English and German reading aids
 
 Use the `DE` / `EN` control in the header to choose the display language. Each
-result card presents an OCRE motif description on its right side, preferring
-the reverse and falling back to the obverse. English preserves the imported
-OCRE description. German is a clearly labelled, rule-based reading aid for
-frequent iconographic terms; it never changes the Latin legend or the stored
-OCRE source text, and unfamiliar terms intentionally remain in English.
+result card presents an expansion aid for every available obverse and reverse
+legend on its right side. The card also lists both available OCRE image
+descriptions separately, rather than choosing one side. English preserves the
+imported OCRE descriptions. German output is clearly labelled as a rule-based
+reading aid; it never changes the Latin legend or the stored OCRE source text,
+and unfamiliar terms intentionally remain in their source language.
 
 ## Coin search API
 
