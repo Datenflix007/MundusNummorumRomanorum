@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ ui_language }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,6 +7,7 @@
   <title>{% block title %}Roman Coin Atlas{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='image-previews.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='reading-aids.css') }}">
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </head>
 <body>
@@ -17,7 +18,7 @@
         <span class="brand-mark" aria-hidden="true">R</span>
         <span><strong>Roman Coin Atlas</strong><small>Searches external RIC reference data from OCRE</small></span>
       </a>
-      <nav aria-label="Primary navigation"><a href="{{ url_for('search_page') }}">Search</a></nav>
+      <nav class="header-controls" aria-label="Primary navigation"><a href="{{ url_for('search_page', lang=ui_language) }}">Search</a><span class="language-switch" aria-label="Display language"><a href="{{ language_url('de') }}" lang="de" {% if ui_language == 'de' %}aria-current="true"{% endif %}>DE</a><span aria-hidden="true">/</span><a href="{{ language_url('en') }}" lang="en" {% if ui_language == 'en' %}aria-current="true"{% endif %}>EN</a></span></nav>
     </div>
   </header>
   <main id="main-content" class="shell">{% block content %}{% endblock %}</main>

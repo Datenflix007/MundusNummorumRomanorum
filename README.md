@@ -135,6 +135,15 @@ and is shown with OCRE's visible credit and a link to the specimen record.
 Image rights can differ from OCRE's ODbL data license; review the credited
 institution's terms before reuse. See [docs/SOURCES.md](docs/SOURCES.md).
 
+## English and German reading aids
+
+Use the `DE` / `EN` control in the header to choose the display language. Each
+result card presents an OCRE motif description on its right side, preferring
+the reverse and falling back to the obverse. English preserves the imported
+OCRE description. German is a clearly labelled, rule-based reading aid for
+frequent iconographic terms; it never changes the Latin legend or the stored
+OCRE source text, and unfamiliar terms intentionally remain in English.
+
 ## Coin search API
 
 The Python-backed JSON API searches imported reference coin types; it never
