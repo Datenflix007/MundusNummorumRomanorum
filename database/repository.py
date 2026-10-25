@@ -98,6 +98,35 @@ class CoinType:
 
 
 @dataclass(frozen=True)
+class CoinSearchCriteria:
+    """Normalized, validated filters for the read-only reference type catalog."""
+
+    keyword: str | None = None
+    start_year: int | None = None
+    end_year: int | None = None
+    material: str | None = None
+    denomination: str | None = None
+    authority: str | None = None
+    mint: str | None = None
+    sort: str = "reference"
+    descending: bool = False
+    limit: int = 25
+    offset: int = 0
+
+
+@dataclass(frozen=True)
+class CoinSearchPage:
+    """A page of matching immutable reference types and its total result count."""
+
+    items: list[CoinType]
+    total: int
+
+
+class DatabaseRequestError(RuntimeError):
+    """Raised when a catalog request cannot be completed by SQLite."""
+
+
+@dataclass(frozen=True)
 class FoundCoinDraft:
     """Data supplied when an individually documented coin is first recorded."""
 
@@ -371,6 +400,78 @@ class CoinRepository:
             ).fetchall()
         return [_coin_type_from_row(row) for row in rows]
 
+    def search_coin_types(self, criteria: CoinSearchCriteria) -> CoinSearchPage:
+        """Search reference types using parameterized AND-combined SQL filters."""
+        where_clauses: list[str] = []
+        parameters: list[str | int] = []
+
+        if criteria.keyword:
+            keyword_columns = (
+                "obverse_legend",
+                "reverse_legend",
+                "obverse_description",
+                "reverse_description",
+                "authority",
+                "mint",
+                "reference_label",
+                "original_reference",
+                "external_id",
+            )
+            keyword_pattern = f"%{_escape_like(criteria.keyword)}%"
+            where_clauses.append(
+                "(" + " OR ".join(f"LOWER(COALESCE({column}, '')) LIKE ? ESCAPE '\\'" for column in keyword_columns) + ")"
+            )
+            parameters.extend([keyword_pattern] * len(keyword_columns))
+
+        for column, value in (
+            ("material", criteria.material),
+            ("denomination", criteria.denomination),
+            ("authority", criteria.authority),
+            ("mint", criteria.mint),
+        ):
+            if value:
+                where_clauses.append(f"LOWER(COALESCE({column}, '')) = ?")
+                parameters.append(value)
+
+        if criteria.start_year is not None:
+            where_clauses.append("date_end >= ?")
+            parameters.append(criteria.start_year)
+        if criteria.end_year is not None:
+            where_clauses.append("date_start <= ?")
+            parameters.append(criteria.end_year)
+
+        where_sql = f" WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        sort_columns = {
+            "reference": "reference_label COLLATE NOCASE",
+            "authority": "authority COLLATE NOCASE",
+            "mint": "mint COLLATE NOCASE",
+            "date_start": "date_start",
+            "date_end": "date_end",
+        }
+        try:
+            sort_sql = sort_columns[criteria.sort]
+        except KeyError as error:
+            raise ValueError(f"Unsupported search sort: {criteria.sort}") from error
+        direction = "DESC" if criteria.descending else "ASC"
+
+        try:
+            with _transaction(self.database_path) as connection:
+                total = connection.execute(
+                    f"SELECT COUNT(*) FROM coin_types{where_sql}", parameters
+                ).fetchone()[0]
+                rows = connection.execute(
+                    f"""
+                    SELECT * FROM coin_types{where_sql}
+                    ORDER BY {sort_sql} {direction}, id ASC
+                    LIMIT ? OFFSET ?
+                    """,
+                    [*parameters, criteria.limit, criteria.offset],
+                ).fetchall()
+        except sqlite3.Error as error:
+            raise DatabaseRequestError("The coin catalog could not be searched.") from error
+
+        return CoinSearchPage(items=[_coin_type_from_row(row) for row in rows], total=total)
+
     def insert_found_coin(self, found_coin: FoundCoinDraft) -> FoundCoin:
         """Insert a local specimen; its reference type is intentionally optional."""
         with _transaction(self.database_path) as connection:
@@ -553,3 +654,8 @@ def _coin_image_from_row(row: sqlite3.Row) -> CoinImage:
         caption=row["caption"],
         rights_note=row["rights_note"],
     )
+
+
+def _escape_like(value: str) -> str:
+    """Escape SQLite LIKE metacharacters so user keywords remain literal text."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

@@ -6,10 +6,11 @@ import argparse
 from pathlib import Path
 from typing import Final, Sequence
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
-from database.repository import CoinRepository, initialize_database
+from database.repository import CoinRepository, DatabaseRequestError, initialize_database
 from services.ocre import OcreError, OcreImportService, OcreSourceAdapter
+from services.search import SearchValidationError, normalize_search_keyword, parse_search_parameters
 
 
 MATERIAL_ALIASES: Final[dict[str, str]] = {
@@ -27,10 +28,10 @@ DEFAULT_DATABASE_PATH: Final[Path] = Path(__file__).parent / "database" / "roman
 
 def normalize_keyword(text: str) -> str:
     """Return a case-insensitive search expression with one space between words."""
-    if not isinstance(text, str):
-        raise TypeError("Search text must be a string.")
-
-    return " ".join(text.split()).casefold()
+    try:
+        return normalize_search_keyword(text)
+    except SearchValidationError as error:
+        raise TypeError("Search text must be a string.") from error
 
 
 def validate_year_range(start: int, end: int) -> tuple[int, int]:
@@ -61,15 +62,77 @@ def normalize_material(material: str) -> str:
         raise ValueError(f"Unsupported material: {material!r}") from error
 
 
-def create_app() -> Flask:
+def create_app(database_path: str | Path | None = None) -> Flask:
     """Create the Flask application without requiring a database connection."""
     app = Flask(__name__)
+    app.config["DATABASE_PATH"] = str(database_path or DEFAULT_DATABASE_PATH)
 
     @app.get("/health")
     def health() -> tuple[object, int]:
         return jsonify(status="ok", service="roman-coin-atlas"), 200
 
+    @app.get("/api/coins")
+    def search_coins() -> tuple[object, int]:
+        try:
+            criteria, page_number = parse_search_parameters(request.args.to_dict(flat=True))
+        except SearchValidationError as error:
+            return jsonify(error={"code": "invalid_query", "message": str(error)}), 400
+
+        try:
+            results = CoinRepository(app.config["DATABASE_PATH"]).search_coin_types(criteria)
+        except DatabaseRequestError as error:
+            return jsonify(error={"code": "database_error", "message": str(error)}), 500
+
+        return jsonify(
+            items=[_serialize_coin_type(coin_type) for coin_type in results.items],
+            pagination={
+                "page": page_number,
+                "page_size": criteria.limit,
+                "total": results.total,
+                "pages": (results.total + criteria.limit - 1) // criteria.limit,
+            },
+        ), 200
+
+    @app.get("/api/coins/<int:coin_type_id>")
+    def coin_detail(coin_type_id: int) -> tuple[object, int]:
+        try:
+            coin_type = CoinRepository(app.config["DATABASE_PATH"]).get_coin_type(coin_type_id)
+        except Exception as error:
+            if error.__class__.__name__ == "OperationalError":
+                return jsonify(error={"code": "database_error", "message": "The coin catalog could not be read."}), 500
+            raise
+        if coin_type is None:
+            return jsonify(error={"code": "not_found", "message": f"Coin type {coin_type_id} was not found."}), 404
+        return jsonify(_serialize_coin_type(coin_type)), 200
+
     return app
+
+
+def _serialize_coin_type(coin_type: object) -> dict[str, object]:
+    """Return immutable reference data as JSON, including source provenance."""
+    return {
+        field: getattr(coin_type, field)
+        for field in (
+            "id",
+            "external_id",
+            "reference_label",
+            "authority",
+            "mint",
+            "denomination",
+            "material",
+            "date_start",
+            "date_end",
+            "obverse_legend",
+            "reverse_legend",
+            "obverse_description",
+            "reverse_description",
+            "source_url",
+            "source_name",
+            "original_reference",
+            "source_attribution",
+            "source_license",
+        )
+    }
 
 
 def main(argv: Sequence[str] | None = None) -> None:

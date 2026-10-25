@@ -114,6 +114,23 @@ and reports existing canonical OCRE IDs as duplicates. It stores no remote
 coin images. If OCRE is unavailable or returns malformed XML, the command exits
 with an error rather than claiming a successful import.
 
+## Coin search API
+
+The Python-backed JSON API searches imported reference coin types; it never
+changes their historical source text. `GET /api/coins` accepts `q`,
+`start_year`, `end_year`, `material`, `denomination`, `authority`, `mint`,
+`sort` (`reference`, `authority`, `mint`, `date_start`, or `date_end`), `order`
+(`asc` or `desc`), `limit` (1–100), and `page`.
+
+```text
+/api/coins?q=roma&material=bronze&start_year=-27&end_year=14&limit=25&page=1
+```
+
+Date filters use inclusive interval overlap. A query returns `200` with an
+empty `items` list when no type matches, `400` for invalid query values, and
+`500` only when SQLite cannot fulfill a request. `GET /api/coins/<id>` returns
+one result with its canonical external ID and source URL.
+
 ## Project layout
 
 ```text
