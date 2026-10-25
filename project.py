@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Final
+import argparse
+from pathlib import Path
+from typing import Final, Sequence
 
 from flask import Flask, jsonify
+
+from database.repository import initialize_database
 
 
 MATERIAL_ALIASES: Final[dict[str, str]] = {
@@ -17,6 +21,7 @@ MATERIAL_ALIASES: Final[dict[str, str]] = {
     "av": "gold",
     "gold": "gold",
 }
+DEFAULT_DATABASE_PATH: Final[Path] = Path(__file__).parent / "database" / "roman_coin_atlas.sqlite"
 
 
 def normalize_keyword(text: str) -> str:
@@ -66,10 +71,35 @@ def create_app() -> Flask:
     return app
 
 
-def main() -> None:
-    """Run the local development server."""
+def main(argv: Sequence[str] | None = None) -> None:
+    """Run the development server or create the repeatable local database schema."""
+    parser = argparse.ArgumentParser(description="Roman Coin Atlas")
+    subcommands = parser.add_subparsers(dest="command")
+
+    init_database_parser = subcommands.add_parser("init-db", help="Create or update the SQLite schema.")
+    init_database_parser.add_argument(
+        "--database",
+        type=Path,
+        default=DEFAULT_DATABASE_PATH,
+        help="SQLite database path (default: database/roman_coin_atlas.sqlite)",
+    )
+
+    serve_parser = subcommands.add_parser("serve", help="Run the local Flask development server.")
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=5000)
+
+    arguments = parser.parse_args(argv)
+    if arguments.command == "init-db":
+        database_path = initialize_database(arguments.database)
+        print(f"Database schema is ready at {database_path}")
+        return
+
     app = create_app()
-    app.run(debug=True)
+    app.run(
+        debug=True,
+        host=getattr(arguments, "host", "127.0.0.1"),
+        port=getattr(arguments, "port", 5000),
+    )
 
 
 if __name__ == "__main__":
