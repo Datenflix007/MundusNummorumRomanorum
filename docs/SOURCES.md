@@ -29,6 +29,16 @@ OCRE states that its database is available under the Open Database License
 derived database. The project imports descriptive metadata only: it does not
 download, store, or redistribute remote coin images, whose rights may differ.
 
+### Representative image previews
+
+Coin detail pages can request representative specimen thumbnails from the
+individual OCRE record page. This is an explicit on-demand action, not part of
+catalog import or search results. The application requests only the trusted
+OCRE record page, passes through only source-provided HTTPS thumbnail URLs and
+the visible per-image credit, and keeps a short-lived metadata cache. It does
+not proxy, download, store, or bulk harvest image files. The user must follow
+the credited institution's image terms; a source link accompanies every preview.
+
 ## Test fixture
 
 `tests/fixtures/ocre/ric.3.ant.1284A_as.xml` is a captured NUDS/XML response
