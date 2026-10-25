@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Results · Roman Coin Atlas{% endblock %}
+{% block content %}
+<div class="results-top"><div><p class="eyebrow">Catalog search</p><h1>Results</h1></div><a class="button-secondary" href="{{ url_for('search_page') }}">New search</a></div>
+{% include "_search_form.html" %}
+{% if error %}<section class="notice notice-error" role="alert"><h2>Search could not be completed</h2><p>{{ error }}</p></section>
+{% elif results.total == 0 %}<section class="notice"><h2>No matching coin types</h2><p>Try fewer filters, a shorter keyword, or a broader date range.</p></section>
+{% else %}
+<section aria-labelledby="result-count"><div class="result-meta"><h2 id="result-count">{{ results.total }} matching coin type{% if results.total != 1 %}s{% endif %}</h2><p>Page {{ page_number }} of {{ page_count }}</p></div><div class="result-list">
+{% for coin_type in results.items %}<article class="coin-card"><div class="coin-visual">{% if coin_type.obverse_image_url %}<img src="{{ coin_type.obverse_image_url }}" alt="Obverse of {{ coin_type.reference_label }}">{% else %}<div class="coin-placeholder" role="img" aria-label="No legally usable coin image available">No image available</div>{% endif %}</div><div class="coin-card-content"><p class="eyebrow">{{ coin_type.external_id }}</p><h3><a href="{{ url_for('coin_page', coin_type_id=coin_type.id) }}">{{ coin_type.reference_label }}</a></h3><dl class="coin-facts"><div><dt>Authority</dt><dd>{{ coin_type.authority or 'Not recorded' }}</dd></div><div><dt>Date</dt><dd>{{ coin_type.date_start if coin_type.date_start is not none else '?' }}–{{ coin_type.date_end if coin_type.date_end is not none else '?' }}</dd></div><div><dt>Denomination</dt><dd>{{ coin_type.denomination or 'Not recorded' }}</dd></div><div><dt>Material</dt><dd>{{ coin_type.material or 'Not recorded' }}</dd></div></dl><p class="inscription-summary"><strong>Obv.</strong> {{ coin_type.obverse_legend or 'Not recorded' }}<br><strong>Rev.</strong> {{ coin_type.reverse_legend or 'Not recorded' }}</p></div></article>{% endfor %}
+</div></section>
+{% endif %}
+{% endblock %}

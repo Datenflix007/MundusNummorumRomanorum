@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A local research interface for Roman imperial coin types.">
+  <title>{% block title %}Roman Coin Atlas{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="{{ url_for('search_page') }}" aria-label="Roman Coin Atlas home">
+        <span class="brand-mark" aria-hidden="true">R</span>
+        <span><strong>Roman Coin Atlas</strong><small>Imperial coin type research</small></span>
+      </a>
+      <nav aria-label="Primary navigation"><a href="{{ url_for('search_page') }}">Search</a></nav>
+    </div>
+  </header>
+  <main id="main-content" class="shell">{% block content %}{% endblock %}</main>
+  <footer class="site-footer"><div class="shell">Local research tool · Reference data retains its source attribution.</div></footer>
+</body>
+</html>
