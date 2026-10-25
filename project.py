@@ -9,7 +9,7 @@ from typing import Final, Sequence
 from flask import Flask, jsonify, render_template, request
 
 from database.repository import CoinRepository, DatabaseRequestError, initialize_database
-from services.ocre import OcreError, OcreImportService, OcreSourceAdapter
+from services.ocre import OcreCoinTypeRecord, OcreError, OcreImportService, OcreSourceAdapter
 from services.search import SearchValidationError, normalize_search_keyword, parse_search_parameters
 
 
@@ -190,18 +190,23 @@ def main(argv: Sequence[str] | None = None) -> None:
         help="SQLite database path (default: database/roman_coin_atlas.sqlite)",
     )
 
-    import_ocre_parser = subcommands.add_parser("import-ocre", help="Import a bounded pilot from OCRE NUDS/XML.")
+    import_ocre_parser = subcommands.add_parser("import-ocre", help="Import OCRE coin types from canonical NUDS/XML.")
     import_ocre_parser.add_argument(
         "--database",
         type=Path,
         default=DEFAULT_DATABASE_PATH,
         help="SQLite database path (default: database/roman_coin_atlas.sqlite)",
     )
-    import_ocre_parser.add_argument(
+    import_selection = import_ocre_parser.add_mutually_exclusive_group()
+    import_selection.add_argument(
         "--limit",
         type=int,
-        default=100,
-        help="Number of OCRE records to request from the documented feed (1-200; default: 100).",
+        help="Number of OCRE pilot records from the documented feed (1-200; default: 100).",
+    )
+    import_selection.add_argument(
+        "--full",
+        action="store_true",
+        help="Import the complete published OCRE catalog; this can take a substantial time.",
     )
 
     serve_parser = subcommands.add_parser("serve", help="Run the local Flask development server.")
@@ -215,11 +220,24 @@ def main(argv: Sequence[str] | None = None) -> None:
         return
     if arguments.command == "import-ocre":
         repository_path = initialize_database(arguments.database)
+        adapter = OcreSourceAdapter()
+        importer = OcreImportService(CoinRepository(repository_path))
         try:
-            discovered_ids, records = OcreSourceAdapter().fetch_pilot(arguments.limit)
+            if arguments.full:
+                def full_batches() -> Iterable[tuple[list[str], list[OcreCoinTypeRecord]]]:
+                    discovered_count = 0
+                    for record_ids in adapter.iter_full_record_id_batches(batch_size=100):
+                        discovered_count += len(record_ids)
+                        if discovered_count % 500 == 0:
+                            print(f"OCRE full import: fetched {discovered_count} canonical identifiers...", flush=True)
+                        yield record_ids, adapter.fetch_records(record_ids, batch_size=100)
+
+                report = importer.import_batches(full_batches())
+            else:
+                discovered_ids, records = adapter.fetch_pilot(arguments.limit or 100)
+                report = importer.import_records(discovered_ids, records)
         except (OcreError, ValueError) as error:
             parser.exit(1, f"OCRE import failed: {error}\n")
-        report = OcreImportService(CoinRepository(repository_path)).import_records(discovered_ids, records)
         print(
             "OCRE import completed: "
             f"{report.imported} imported, {report.duplicates} already present, "

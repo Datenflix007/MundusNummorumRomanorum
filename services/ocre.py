@@ -1,15 +1,16 @@
 """OCRE NUDS/XML adapter and idempotent import service.
 
-Only documented OCRE endpoints are used: the Atom feed for a bounded list of
-current records and ``apis/getNuds`` for aggregated NUDS/XML retrieval.
+Only documented OCRE endpoints are used: the Atom feed for a bounded pilot,
+the VoID document for the complete published identifier dump, and
+``apis/getNuds`` for canonical NUDS/XML retrieval.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from time import sleep
-from typing import Callable, Iterable
-from urllib.parse import unquote, urlparse
+from typing import Callable, Iterable, Iterator
+from urllib.parse import unquote, urljoin, urlparse
 from xml.etree import ElementTree
 
 import requests
@@ -22,6 +23,7 @@ NUDS_NAMESPACE = "http://nomisma.org/nuds"
 XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
 NAMESPACES = {"atom": ATOM_NAMESPACE, "nuds": NUDS_NAMESPACE}
 OCRE_FEED_URL = "https://numismatics.org/ocre/feed/"
+OCRE_VOID_URL = "https://numismatics.org/ocre/nomisma.void.rdf"
 OCRE_NUDS_URL = "https://numismatics.org/ocre/apis/getNuds"
 OCRE_CANONICAL_URI_PREFIX = "http://numismatics.org/ocre/id/"
 OCRE_SOURCE_NAME = "Online Coins of the Roman Empire (OCRE)"
@@ -97,13 +99,13 @@ class OcreImportReport:
 
 
 class OcreSourceAdapter:
-    """Fetch and parse OCRE data via its documented Atom and NUDS endpoints."""
+    """Fetch OCRE data through its documented discovery and NUDS endpoints."""
 
     def __init__(
         self,
         session: requests.Session | None = None,
         *,
-        timeout_seconds: float = 20.0,
+        timeout_seconds: float = 60.0,
         request_delay_seconds: float = 0.3,
         sleeper: Callable[[float], None] = sleep,
     ) -> None:
@@ -141,12 +143,14 @@ class OcreSourceAdapter:
             raise OcreParseError("OCRE Atom feed contained no usable RIC identifiers.")
         return record_ids
 
-    def fetch_records(self, record_ids: Iterable[str]) -> list[OcreCoinTypeRecord]:
-        """Retrieve and parse documented NUDS/XML records in modest batches of 25."""
+    def fetch_records(self, record_ids: Iterable[str], batch_size: int = 25) -> list[OcreCoinTypeRecord]:
+        """Retrieve and parse documented NUDS/XML records in bounded batches."""
+        if batch_size < 1:
+            raise ValueError("OCRE NUDS batches must contain at least one record.")
         unique_ids = list(dict.fromkeys(record_ids))
         records: list[OcreCoinTypeRecord] = []
-        for offset in range(0, len(unique_ids), 25):
-            batch = unique_ids[offset : offset + 25]
+        for offset in range(0, len(unique_ids), batch_size):
+            batch = unique_ids[offset : offset + batch_size]
             response = self._get(OCRE_NUDS_URL, params={"identifiers": "|".join(batch)})
             records.extend(parse_nuds_xml(response.content))
         return records
@@ -156,6 +160,67 @@ class OcreSourceAdapter:
         record_ids = self.discover_record_ids(limit)
         return record_ids, self.fetch_records(record_ids)
 
+    def iter_full_record_id_batches(self, batch_size: int = 25) -> Iterator[list[str]]:
+        """Yield every canonical RIC identifier from OCRE's complete catalog.
+
+        The documented Atom feed supplies pagination links. The published RDF
+        dump is used only as a complete-source network fallback. Identifiers
+        are streamed so the complete catalog does not have to fit in memory.
+        """
+        if batch_size < 1:
+            raise ValueError("OCRE import batches must contain at least one record.")
+
+        try:
+            # OCRE documents Atom as a programmatic harvesting interface. Its
+            # own pagination links avoid inventing search parameters.
+            yield from self._iter_atom_record_id_batches(batch_size)
+        except OcreNetworkError:
+            # The official RDF dump remains a complete-source fallback when
+            # the feed is temporarily unavailable.
+            yield from self._iter_rdf_record_id_batches(batch_size)
+
+    def _iter_rdf_record_id_batches(self, batch_size: int) -> Iterator[list[str]]:
+        void_response = self._get(OCRE_VOID_URL)
+        dump_url = parse_void_data_dump_url(void_response.content)
+        dump_response = self._get(dump_url, stream=True)
+        try:
+            batch: list[str] = []
+            for record_id in iter_rdf_record_ids(dump_response.iter_content(chunk_size=64 * 1024)):
+                batch.append(record_id)
+                if len(batch) == batch_size:
+                    yield batch
+                    batch = []
+            if batch:
+                yield batch
+        finally:
+            dump_response.close()
+
+    def _iter_atom_record_id_batches(self, batch_size: int) -> Iterator[list[str]]:
+        """Follow OCRE-provided Atom ``next`` links until the catalog ends."""
+        page_url: str | None = OCRE_FEED_URL
+        seen_page_urls: set[str] = set()
+        seen_ids: set[str] = set()
+        batch: list[str] = []
+        while page_url:
+            if page_url in seen_page_urls:
+                raise OcreParseError("OCRE Atom feed repeated a pagination link.")
+            seen_page_urls.add(page_url)
+            response = self._get(page_url)
+            record_ids, next_url = parse_atom_feed_page(response.content, page_url)
+            for record_id in record_ids:
+                if record_id in seen_ids:
+                    continue
+                seen_ids.add(record_id)
+                batch.append(record_id)
+                if len(batch) == batch_size:
+                    yield batch
+                    batch = []
+            page_url = next_url
+        if not seen_ids:
+            raise OcreParseError("OCRE Atom feed contained no usable RIC identifiers.")
+        if batch:
+            yield batch
+
     def _get(self, url: str, **kwargs: object) -> requests.Response:
         if self._requests_made:
             self.sleeper(self.request_delay_seconds)
@@ -163,7 +228,10 @@ class OcreSourceAdapter:
         try:
             response = self.session.get(
                 url,
-                headers={"User-Agent": OCRE_USER_AGENT, "Accept": "application/xml, application/atom+xml"},
+                headers={
+                    "User-Agent": OCRE_USER_AGENT,
+                    "Accept": "application/xml, application/atom+xml, application/rdf+xml",
+                },
                 timeout=self.timeout_seconds,
                 **kwargs,
             )
@@ -183,20 +251,37 @@ class OcreImportService:
         self, discovered_ids: Iterable[str], records: Iterable[OcreCoinTypeRecord]
     ) -> OcreImportReport:
         """Import unique parsed records and report idempotent duplicate skips."""
-        imported = 0
-        duplicates = 0
         parsed_records = list(records)
-        for record in parsed_records:
-            _, created = self.repository.insert_coin_type_if_new(record.to_coin_type_input())
-            if created:
-                imported += 1
-            else:
-                duplicates += 1
+        imported, duplicates = self.repository.insert_coin_types_if_new(
+            record.to_coin_type_input() for record in parsed_records
+        )
         return OcreImportReport(
             discovered=len(list(discovered_ids)),
             parsed=len(parsed_records),
             imported=imported,
             duplicates=duplicates,
+        )
+
+    def import_batches(
+        self, batches: Iterable[tuple[Iterable[str], Iterable[OcreCoinTypeRecord]]]
+    ) -> OcreImportReport:
+        """Import source batches incrementally, allowing a full import to resume.
+
+        A network interruption can leave earlier batches committed. Re-running
+        the same command is safe because canonical external IDs are unique.
+        """
+        total_discovered = total_parsed = total_imported = total_duplicates = 0
+        for discovered_ids, records in batches:
+            report = self.import_records(discovered_ids, records)
+            total_discovered += report.discovered
+            total_parsed += report.parsed
+            total_imported += report.imported
+            total_duplicates += report.duplicates
+        return OcreImportReport(
+            discovered=total_discovered,
+            parsed=total_parsed,
+            imported=total_imported,
+            duplicates=total_duplicates,
         )
 
 
@@ -211,6 +296,71 @@ def parse_nuds_xml(xml_data: bytes | str) -> list[OcreCoinTypeRecord]:
     if not nuds_records:
         raise OcreParseError("OCRE NUDS response contained no conceptual records.")
     return [_parse_nuds_record(record) for record in nuds_records]
+
+
+def parse_void_data_dump_url(xml_data: bytes | str) -> str:
+    """Return OCRE's HTTPS RDF dump URL from its published VoID metadata."""
+    try:
+        root = ElementTree.fromstring(xml_data)
+    except ElementTree.ParseError as error:
+        raise OcreParseError("OCRE VoID metadata was not well-formed XML.") from error
+
+    for element in root.iter():
+        if _local_name(element.tag) != "dataDump":
+            continue
+        url = element.get(f"{{{XLINK_NAMESPACE}}}href") or element.get(
+            "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource"
+        )
+        if _is_ocre_data_url(url):
+            return _prefer_https(url)
+    raise OcreParseError("OCRE VoID metadata did not provide a trusted RDF data-dump URL.")
+
+
+def parse_atom_feed_page(xml_data: bytes | str, page_url: str) -> tuple[list[str], str | None]:
+    """Parse one OCRE Atom result page and its server-provided next link."""
+    try:
+        root = ElementTree.fromstring(xml_data)
+    except ElementTree.ParseError as error:
+        raise OcreParseError("OCRE Atom feed was not well-formed XML.") from error
+
+    record_ids: list[str] = []
+    for entry in root.findall("atom:entry", NAMESPACES):
+        for link in entry.findall("atom:link", NAMESPACES):
+            uri = link.get("href")
+            record_id = _record_id_from_uri(uri) if _is_ocre_canonical_uri(uri) else None
+            if record_id and record_id.startswith("ric."):
+                record_ids.append(record_id)
+                break
+
+    next_url: str | None = None
+    for link in root.findall("atom:link", NAMESPACES):
+        if link.get("rel") != "next":
+            continue
+        candidate = urljoin(page_url, link.get("href", ""))
+        if not _is_ocre_feed_url(candidate):
+            raise OcreParseError("OCRE Atom feed supplied an untrusted pagination link.")
+        next_url = _prefer_https(candidate)
+        break
+    return record_ids, next_url
+
+
+def iter_rdf_record_ids(chunks: Iterable[bytes]) -> Iterator[str]:
+    """Stream distinct OCRE RIC identifiers from an RDF/XML data dump."""
+    parser = ElementTree.XMLPullParser(events=("end",))
+    seen: set[str] = set()
+    try:
+        for chunk in chunks:
+            parser.feed(chunk)
+            for _, element in parser.read_events():
+                uri = element.get("{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about")
+                record_id = _record_id_from_uri(uri) if _is_ocre_canonical_uri(uri) else None
+                if record_id and record_id.startswith("ric.") and record_id not in seen:
+                    seen.add(record_id)
+                    yield record_id
+                element.clear()
+        parser.close()
+    except ElementTree.ParseError as error:
+        raise OcreParseError("OCRE RDF data dump was not well-formed XML.") from error
 
 
 def _parse_nuds_record(record: ElementTree.Element) -> OcreCoinTypeRecord:
@@ -294,6 +444,35 @@ def _record_id_from_uri(uri: str | None) -> str | None:
         return None
     record_id = unquote(path.split(marker, maxsplit=1)[1]).removesuffix(".xml")
     return record_id or None
+
+
+def _is_ocre_data_url(url: str | None) -> bool:
+    """Accept only OCRE's published legacy or HTTPS data-dump URI."""
+    if not url:
+        return False
+    parsed = urlparse(url)
+    return parsed.scheme in {"http", "https"} and parsed.netloc == "numismatics.org" and parsed.path.startswith("/ocre/")
+
+
+def _prefer_https(url: str) -> str:
+    """Use encrypted transport when OCRE's legacy metadata uses HTTP URIs."""
+    return url.replace("http://", "https://", 1)
+
+
+def _is_ocre_canonical_uri(url: str | None) -> bool:
+    """Recognize OCRE's HTTP canonical record URIs inside its RDF data dump."""
+    if not url:
+        return False
+    parsed = urlparse(url)
+    return parsed.scheme in {"http", "https"} and parsed.netloc == "numismatics.org" and parsed.path.startswith("/ocre/id/")
+
+
+def _is_ocre_feed_url(url: str | None) -> bool:
+    """Accept OCRE's own feed links, including the legacy HTTP identifiers."""
+    if not url:
+        return False
+    parsed = urlparse(url)
+    return parsed.scheme in {"http", "https"} and parsed.netloc == "numismatics.org" and parsed.path.startswith("/ocre/feed/")
 
 
 def _local_name(tag: str) -> str:

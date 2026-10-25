@@ -370,6 +370,56 @@ class CoinRepository:
             raise RuntimeError("Imported coin type could not be retrieved.")
         return inserted, True
 
+    def insert_coin_types_if_new(self, coin_types: Iterable[CoinTypeInput]) -> tuple[int, int]:
+        """Insert a source batch once in one transaction.
+
+        Existing external rows are deliberately left untouched; this keeps
+        canonical source data read-only while making complete imports practical.
+        """
+        imported = 0
+        duplicates = 0
+        with _transaction(self.database_path) as connection:
+            for coin_type in coin_types:
+                cursor = connection.execute(
+                    """
+                    INSERT OR IGNORE INTO coin_types (
+                        external_id, reference_label, authority, mint, denomination,
+                        material, date_start, date_end, obverse_legend, reverse_legend,
+                        obverse_description, reverse_description, source_url,
+                        source_name, original_reference, source_attribution, source_license,
+                        obverse_image_url, reverse_image_url, image_attribution, image_license
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        coin_type.external_id,
+                        coin_type.reference_label,
+                        coin_type.authority,
+                        coin_type.mint,
+                        coin_type.denomination,
+                        coin_type.material,
+                        coin_type.date_start,
+                        coin_type.date_end,
+                        coin_type.obverse_legend,
+                        coin_type.reverse_legend,
+                        coin_type.obverse_description,
+                        coin_type.reverse_description,
+                        coin_type.source_url,
+                        coin_type.source_name,
+                        coin_type.original_reference,
+                        coin_type.source_attribution,
+                        coin_type.source_license,
+                        coin_type.obverse_image_url,
+                        coin_type.reverse_image_url,
+                        coin_type.image_attribution,
+                        coin_type.image_license,
+                    ),
+                )
+                if cursor.rowcount:
+                    imported += 1
+                else:
+                    duplicates += 1
+        return imported, duplicates
+
     def get_coin_type(self, coin_type_id: int, *, connection: sqlite3.Connection | None = None) -> CoinType | None:
         """Retrieve a reference type by its local identifier."""
         if connection is not None:
@@ -418,10 +468,24 @@ class CoinRepository:
                 "external_id",
             )
             keyword_pattern = f"%{_escape_like(criteria.keyword)}%"
-            where_clauses.append(
-                "(" + " OR ".join(f"LOWER(COALESCE({column}, '')) LIKE ? ESCAPE '\\'" for column in keyword_columns) + ")"
+            keyword_clause = " OR ".join(
+                f"LOWER(COALESCE({column}, '')) LIKE ? ESCAPE '\\'" for column in keyword_columns
             )
             parameters.extend([keyword_pattern] * len(keyword_columns))
+
+            compact_legend = _compact_legend_expression(criteria.keyword)
+            if compact_legend:
+                compact_pattern = f"%{_escape_like(compact_legend)}%"
+                legend_clause = " OR ".join(
+                    "REPLACE(REPLACE(REPLACE(LOWER(COALESCE("
+                    + column
+                    + ", '')), ' ', ''), '.', ''), '·', '') LIKE ? ESCAPE '\\'"
+                    for column in ("obverse_legend", "reverse_legend")
+                )
+                parameters.extend([compact_pattern, compact_pattern])
+                where_clauses.append(f"({keyword_clause} OR {legend_clause})")
+            else:
+                where_clauses.append(f"({keyword_clause})")
 
         for column, value in (
             ("material", criteria.material),
@@ -659,3 +723,8 @@ def _coin_image_from_row(row: sqlite3.Row) -> CoinImage:
 def _escape_like(value: str) -> str:
     """Escape SQLite LIKE metacharacters so user keywords remain literal text."""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _compact_legend_expression(value: str) -> str:
+    """Ignore common legend separators for abbreviation searches such as PPP."""
+    return value.replace(" ", "").replace(".", "").replace("·", "")

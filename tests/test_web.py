@@ -46,6 +46,8 @@ def test_search_page_has_labeled_accessible_filters(web_client) -> None:
     assert 'name="material"' in page
     assert 'data-search-form' in page
     assert 'static/styles.css' in page
+    assert "Searches external RIC reference data from OCRE" in page
+    assert "Local research tool" not in page
 
 
 def test_results_page_renders_compact_coin_card_and_placeholder(web_client) -> None:

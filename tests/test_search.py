@@ -57,7 +57,7 @@ def catalog(tmp_path: Path) -> CoinRepository:
             date_start=8,
             date_end=12,
             obverse_legend="TI GAMMA",
-            reverse_legend="S C",
+            reverse_legend="COS XVII CENS P P P",
             obverse_description="Radiate bust facing right",
             reverse_description="Eagle on globe",
             source_url="https://example.invalid/gamma",
@@ -95,6 +95,13 @@ def test_date_range_uses_interval_overlap(catalog: CoinRepository) -> None:
 
     assert items == ["ric.test.alpha", "ric.test.beta"]
     assert total == 2
+
+
+def test_keyword_search_accepts_unspaced_legend_abbreviations(catalog: CoinRepository) -> None:
+    items, total = _search(catalog, q="PPP")
+
+    assert items == ["ric.test.gamma"]
+    assert total == 1
 
 
 def test_combined_filters_use_and_semantics(catalog: CoinRepository) -> None:
