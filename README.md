@@ -125,6 +125,16 @@ and reports existing canonical OCRE IDs as duplicates. It stores no remote
 coin images. If OCRE is unavailable or returns malformed XML, the command exits
 with an error rather than claiming a successful import.
 
+## Representative coin images
+
+The detail page can load a small set of representative specimen thumbnails from
+the corresponding OCRE record after you explicitly select the image button.
+This does not download or store images locally, and no image request is made by
+search results or imports. Each image remains hosted by its source institution
+and is shown with OCRE's visible credit and a link to the specimen record.
+Image rights can differ from OCRE's ODbL data license; review the credited
+institution's terms before reuse. See [docs/SOURCES.md](docs/SOURCES.md).
+
 ## Coin search API
 
 The Python-backed JSON API searches imported reference coin types; it never

@@ -1,0 +1,41 @@
+.image-preview-request {
+  padding: 1rem;
+  background: var(--card);
+}
+
+.image-note {
+  margin: .7rem 0 0;
+  color: var(--muted);
+  font: .8rem Arial, sans-serif;
+}
+
+.image-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .8rem;
+  margin-top: 1rem;
+}
+
+.image-preview-grid figure {
+  margin: 0;
+}
+
+.image-preview-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  background: var(--paper-deep);
+}
+
+.image-preview-grid figcaption {
+  padding: .45rem;
+  font: .74rem Arial, sans-serif;
+  line-height: 1.35;
+}
+
+@media (max-width: 480px) {
+  .image-preview-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from time import monotonic
 from pathlib import Path
 from typing import Final, Sequence
 
@@ -10,6 +11,7 @@ from flask import Flask, jsonify, render_template, request
 
 from database.repository import CoinRepository, DatabaseRequestError, initialize_database
 from services.ocre import OcreCoinTypeRecord, OcreError, OcreImportService, OcreSourceAdapter
+from services.ocre_images import OcreImageAdapter, OcreImageError
 from services.search import SearchValidationError, normalize_search_keyword, parse_search_parameters
 
 
@@ -24,6 +26,8 @@ MATERIAL_ALIASES: Final[dict[str, str]] = {
     "gold": "gold",
 }
 DEFAULT_DATABASE_PATH: Final[Path] = Path(__file__).parent / "database" / "roman_coin_atlas.sqlite"
+OCRE_IMAGE_CACHE_SECONDS: Final[float] = 600.0
+OCRE_IMAGE_CACHE_LIMIT: Final[int] = 256
 
 
 def normalize_keyword(text: str) -> str:
@@ -66,6 +70,8 @@ def create_app(database_path: str | Path | None = None) -> Flask:
     """Create the Flask application without requiring a database connection."""
     app = Flask(__name__)
     app.config["DATABASE_PATH"] = str(database_path or DEFAULT_DATABASE_PATH)
+    app.config["OCRE_IMAGE_ADAPTER_FACTORY"] = OcreImageAdapter
+    app.extensions["ocre_image_preview_cache"] = {}
 
     @app.get("/health")
     def health() -> tuple[object, int]:
@@ -140,6 +146,34 @@ def create_app(database_path: str | Path | None = None) -> Flask:
         if coin_type is None:
             return jsonify(error={"code": "not_found", "message": f"Coin type {coin_type_id} was not found."}), 404
         return jsonify(_serialize_coin_type(coin_type)), 200
+
+    @app.get("/api/coins/<int:coin_type_id>/images")
+    def coin_image_previews(coin_type_id: int) -> tuple[object, int]:
+        """Fetch attributed specimen previews only after a user requests them."""
+        try:
+            coin_type = CoinRepository(app.config["DATABASE_PATH"]).get_coin_type(coin_type_id)
+        except Exception:
+            return jsonify(error={"code": "database_error", "message": "The coin catalog could not be read."}), 500
+        if coin_type is None:
+            return jsonify(error={"code": "not_found", "message": f"Coin type {coin_type_id} was not found."}), 404
+
+        cache: dict[int, tuple[float, list[dict[str, str | None]]]] = app.extensions["ocre_image_preview_cache"]
+        cached = cache.get(coin_type_id)
+        if cached and monotonic() - cached[0] < OCRE_IMAGE_CACHE_SECONDS:
+            return jsonify(items=cached[1], cached=True), 200
+
+        try:
+            adapter_factory = app.config["OCRE_IMAGE_ADAPTER_FACTORY"]
+            previews = adapter_factory().fetch_previews(coin_type.source_url)
+        except OcreImageError as error:
+            return jsonify(error={"code": "image_source_unavailable", "message": str(error)}), 502
+
+        items = [preview.as_dict() for preview in previews]
+        if len(cache) >= OCRE_IMAGE_CACHE_LIMIT:
+            oldest_key = min(cache, key=lambda key: cache[key][0])
+            del cache[oldest_key]
+        cache[coin_type_id] = (monotonic(), items)
+        return jsonify(items=items, cached=False), 200
 
     return app
 
