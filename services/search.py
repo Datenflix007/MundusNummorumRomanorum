@@ -15,6 +15,7 @@ class SearchValidationError(ValueError):
 SORT_OPTIONS = frozenset({"reference", "authority", "mint", "date_start", "date_end"})
 ORDER_OPTIONS = frozenset({"asc", "desc"})
 MAX_PAGE_SIZE = 100
+MAX_BOOLEAN_KEYWORD_TERMS = 8
 
 
 def normalize_search_keyword(text: str) -> str:
@@ -31,7 +32,7 @@ def parse_search_parameters(parameters: Mapping[str, str]) -> tuple[CoinSearchCr
     if start_year is not None and end_year is not None and start_year > end_year:
         raise SearchValidationError("start_year must not be after end_year.")
 
-    keyword = _normalize_optional(parameters.get("q"))
+    keyword, keyword_groups = _parse_keyword_expression(parameters.get("q"))
     limit = _parse_bounded_int(parameters.get("limit"), "limit", default=25, minimum=1, maximum=MAX_PAGE_SIZE)
     page = _parse_bounded_int(parameters.get("page"), "page", default=1, minimum=1, maximum=None)
     sort = parameters.get("sort", "reference").strip().casefold()
@@ -44,6 +45,7 @@ def parse_search_parameters(parameters: Mapping[str, str]) -> tuple[CoinSearchCr
     return (
         CoinSearchCriteria(
             keyword=keyword,
+            keyword_groups=keyword_groups,
             start_year=start_year,
             end_year=end_year,
             material=_normalize_optional(parameters.get("material")),
@@ -64,6 +66,37 @@ def _normalize_optional(value: str | None) -> str | None:
         return None
     normalized = normalize_search_keyword(value)
     return normalized or None
+
+
+def _parse_keyword_expression(value: str | None) -> tuple[str | None, tuple[tuple[str, ...], ...]]:
+    """Parse a small boolean query grammar while retaining literal search terms.
+
+    ``&&`` requires both terms; ``||`` accepts either alternative. Parentheses
+    and bare ampersands/pipes are deliberately rejected rather than interpreted
+    ambiguously. Without an operator, a query remains the legacy partial phrase
+    search.
+    """
+    keyword = _normalize_optional(value)
+    if keyword is None:
+        return None, ()
+    if "(" in keyword or ")" in keyword:
+        raise SearchValidationError("Keyword expressions do not support parentheses; use && and || from left to right.")
+    if re.search(r"(?<!&)&(?!&)|(?<!\|)\|(?!\|)", keyword):
+        raise SearchValidationError("Use && for AND and || for OR between complete keywords.")
+    if "&&" not in keyword and "||" not in keyword:
+        return keyword, ((keyword,),)
+
+    alternatives = keyword.split("||")
+    groups: list[tuple[str, ...]] = []
+    for alternative in alternatives:
+        terms = tuple(normalize_search_keyword(term) for term in alternative.split("&&"))
+        if not all(terms):
+            raise SearchValidationError("Each && or || must have a keyword on both sides.")
+        groups.append(terms)
+
+    if sum(len(group) for group in groups) > MAX_BOOLEAN_KEYWORD_TERMS:
+        raise SearchValidationError(f"A keyword expression may contain at most {MAX_BOOLEAN_KEYWORD_TERMS} terms.")
+    return keyword, tuple(groups)
 
 
 def _parse_year(value: str | None, name: str) -> int | None:

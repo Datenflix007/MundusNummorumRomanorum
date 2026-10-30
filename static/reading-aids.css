@@ -39,41 +39,45 @@
 }
 
 .reading-aid-heading {
-  margin-bottom: .7rem;
+  margin-bottom: .45rem;
 }
 
 .side-reading-aid {
-  padding: .85rem;
-  background: rgba(255, 253, 248, .74);
-  border: 1px solid var(--line);
+  padding: .6rem 0;
 }
 
 .side-reading-aid + .side-reading-aid {
-  margin-top: .7rem;
+  border-top: 1px solid var(--line);
 }
 
 .side-reading-aid h4 {
-  margin: 0 0 .55rem;
+  margin: 0 0 .32rem;
   color: var(--bronze-dark);
-  font-size: 1rem;
+  font-size: .98rem;
 }
 
 .side-reading-aid dl {
   display: grid;
-  gap: .55rem;
+  gap: .25rem;
   margin: 0;
+}
+
+.side-reading-aid dl > div {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: .45rem;
 }
 
 .side-reading-aid dt {
   color: var(--muted);
-  font: 700 .68rem Arial, sans-serif;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  font: 700 .72rem Arial, sans-serif;
 }
 
 .side-reading-aid dd {
-  margin: .08rem 0 0;
+  margin: 0;
   font-size: .88rem;
+  line-height: 1.35;
 }
 
 .reading-aid-note,
